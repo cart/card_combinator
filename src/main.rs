@@ -1,16 +1,23 @@
+#[allow(dead_code, unused_variables, unused_mut, unused_imports)]
+mod game;
+
 use bevy::prelude::*;
+use bevy_inspector_egui::WorldInspectorPlugin;
+use bevy_rapier3d::prelude::*;
+
+use crate::game::GamePlugin;
 
 fn main() {
     App::new()
+        .insert_resource(AmbientLight {
+            color: Color::WHITE,
+            brightness: 0.0,
+        })
+        .insert_resource(ClearColor(Color::rgb(0.1, 0.1, 0.1)))
         .add_plugins(DefaultPlugins)
-        .add_startup_system(setup)
+        .add_plugin(WorldInspectorPlugin::new())
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        // .add_plugin(RapierDebugRenderPlugin::default())
+        .add_plugin(GamePlugin)
         .run();
-}
-
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn_bundle(Camera2dBundle::default());
-    commands.spawn_bundle(SpriteBundle {
-        texture: asset_server.load("icon.png"),
-        ..Default::default()
-    });
 }
