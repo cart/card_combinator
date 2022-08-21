@@ -2,11 +2,9 @@ pub mod animate;
 pub mod camera;
 pub mod card;
 
-use bevy::prelude::*;
-
-use crate::game::card::{Card, CardBundle, CardColor, CardPlugin};
-
 use self::camera::PlayerCameraPlugin;
+use crate::game::card::{Card, CardBundle, CardColor, CardPlugin};
+use bevy::prelude::*;
 
 pub struct GamePlugin;
 
