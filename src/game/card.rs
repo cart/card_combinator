@@ -15,9 +15,13 @@ impl Plugin for CardPlugin {
             .init_resource::<HoverPoint>()
             .init_resource::<StackRoots>()
             .add_system_to_stage(CoreStage::PostUpdate, on_spawn_card)
-            .add_system(select_card.after(crate::game::camera::move_camera))
-            .add_system(move_cards.after(select_card))
-            .add_system(collide_cards.after(move_cards));
+            .add_system(collide_cards)
+            .add_system(
+                select_card
+                    .after(crate::game::camera::move_camera)
+                    .after(collide_cards),
+            )
+            .add_system(move_cards.after(select_card));
     }
 }
 
@@ -178,14 +182,15 @@ fn position_stack(
     depth: usize,
 ) {
     let child = if let Ok((_, card, mut transform)) = cards.get_mut(entity) {
-        transform.translation = root_position + Vec3::new(0.0, -0.3, 0.1 * depth as f32);
+        transform.translation =
+            root_position + Vec3::new(0.0, -0.3 * depth as f32, 0.01 * depth as f32);
         card.stack_child
     } else {
         None
     };
 
     if let Some(child) = child {
-        position_stack(cards, child, root_position, 2);
+        position_stack(cards, child, root_position, depth + 1);
     }
 }
 
@@ -193,12 +198,16 @@ fn collide_cards(
     mut commands: Commands,
     mut collisions: EventReader<CollisionEvent>,
     mut stack_roots: ResMut<StackRoots>,
+    mut selected: Res<SelectedCard>,
     mut cards: Query<(&mut Card, &Transform)>,
 ) {
     let mut stack_x_on_y = Vec::new();
     for collision in collisions.iter() {
         match *collision {
             CollisionEvent::Started(e1, e2, _) => {
+                if selected.is_selected(e1) || selected.is_selected(e2) {
+                    continue;
+                }
                 if let Ok([(mut c1, t1), (mut c2, t2)]) = cards.get_many_mut([e1, e2]) {
                     if t1.translation.z > t2.translation.z {
                         if c1.stack_parent.is_none() {
@@ -217,6 +226,7 @@ fn collide_cards(
 
     for (ex, ey) in stack_x_on_y {
         let top = find_stack_top(&cards, ey);
+        println!("try stack {ex:?} {ey:?} top {top:?}");
         if let Ok([(mut cx, _), (mut ctop, _)]) = cards.get_many_mut([ex, top]) {
             if cx.stack_parent.is_none() && ctop.stack_child.is_none() {
                 ctop.stack_child = Some(ex);
@@ -232,8 +242,8 @@ fn collide_cards(
 fn find_stack_top(cards: &Query<(&mut Card, &Transform)>, mut current_entity: Entity) -> Entity {
     loop {
         if let Ok((card, _)) = cards.get(current_entity) {
-            if let Some(parent) = card.stack_parent {
-                current_entity = parent;
+            if let Some(child) = card.stack_child {
+                current_entity = child;
             } else {
                 return current_entity;
             }
@@ -248,6 +258,7 @@ fn select_card(
     windows: Res<Windows>,
     mut selected_card: ResMut<SelectedCard>,
     mut hover_point: ResMut<HoverPoint>,
+    mut stack_roots: ResMut<StackRoots>,
     mouse: Res<Input<MouseButton>>,
     mut cards: Query<&mut Card>,
     cameras: Query<(&Camera, &Transform), With<PlayerCamera>>,
@@ -287,9 +298,24 @@ fn select_card(
             let result = context.cast_ray(near, direction, 50.0, true, QueryFilter::new());
 
             if let Some((entity, toi)) = result {
-                let mut card = cards.get_mut(entity).unwrap();
-                card.animations.select.reset();
-                *selected_card = SelectedCard::Some(entity);
+                let parent = {
+                    let mut card = cards.get_mut(entity).unwrap();
+                    card.animations.select.reset();
+                    *selected_card = SelectedCard::Some(entity);
+                    // begin unstack
+                    stack_roots.insert(entity);
+                    let parent = card.stack_parent;
+                    card.stack_parent = None;
+                    parent
+                };
+                // finish unstack
+                if let Some(parent) = parent {
+                    let mut card = cards.get_mut(parent).unwrap();
+                    card.stack_child = None;
+                    if card.stack_parent.is_none() {
+                        stack_roots.remove(&parent);
+                    }
+                }
                 return;
             }
         }
