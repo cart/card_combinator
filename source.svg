@@ -27,9 +27,9 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      showgrid="false"
-     inkscape:zoom="1.1853404"
-     inkscape:cx="15.607332"
-     inkscape:cy="517.57286"
+     inkscape:zoom="0.5926702"
+     inkscape:cx="898.47608"
+     inkscape:cy="449.65986"
      inkscape:window-width="3440"
      inkscape:window-height="1440"
      inkscape:window-x="0"
@@ -62,6 +62,17 @@
        x="97.276276"
        y="65.315277"
        ry="7.3276014" />
+    <rect
+       style="fill:#ffffff;fill-opacity:1;stroke:#929292;stroke-width:9.5527;stroke-linecap:round;stroke-dasharray:none;stroke-opacity:1;paint-order:markers stroke fill;stop-color:#000000"
+       id="rect184-3"
+       width="300"
+       height="300"
+       x="234.49426"
+       y="16.05546"
+       ry="7.3276014"
+       inkscape:export-filename="assets/tile.png"
+       inkscape:export-xdpi="81.4228"
+       inkscape:export-ydpi="81.4228" />
     <path
        id="rect184-7"
        style="fill:#ffffff;stroke:#929292;stroke-width:4.77635;stroke-linecap:round;stroke-dasharray:none;paint-order:markers stroke fill;stop-color:#000000"

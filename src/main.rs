@@ -13,7 +13,7 @@ fn main() {
             color: Color::WHITE,
             brightness: 0.4,
         })
-        .insert_resource(ClearColor(Color::rgb(0.12, 0.12, 0.15)))
+        .insert_resource(ClearColor(Color::rgb(0.2, 0.2, 0.2)))
         .add_plugins(DefaultPlugins)
         .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())

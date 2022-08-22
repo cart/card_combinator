@@ -1,12 +1,16 @@
 pub mod animate;
 pub mod camera;
 pub mod card;
+pub mod progress_bar;
 pub mod tile;
 
 use std::f32::consts::PI;
 
 use self::camera::PlayerCameraPlugin;
-use crate::game::card::{Card, CardBundle, CardColor, CardPlugin};
+use crate::game::{
+    card::{Card, CardBundle, CardColor, CardPlugin},
+    progress_bar::{ProgressBar, ProgressBarBundle, ProgressBarPlugin},
+};
 use bevy::prelude::*;
 
 pub struct GamePlugin;
@@ -15,6 +19,7 @@ impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(CardPlugin)
             .add_plugin(PlayerCameraPlugin)
+            .add_plugin(ProgressBarPlugin)
             .add_startup_system(setup);
     }
 }
@@ -163,6 +168,16 @@ fn setup(
         transform: Transform::from_xyz(0.0, -3.0, 0.0),
         material: tile_material.clone(),
         mesh: tile_mesh.clone(),
+        ..default()
+    });
+    commands.spawn_bundle(ProgressBarBundle {
+        progress_bar: ProgressBar {
+            current: 60.0,
+            total: 100.0,
+            width: 2.0,
+            height: 0.15,
+            padding: 0.05,
+        },
         ..default()
     });
 
