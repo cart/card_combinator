@@ -7,7 +7,7 @@ pub struct PlayerCamera {
 
 impl Default for PlayerCamera {
     fn default() -> Self {
-        Self { base_speed: 1.0 }
+        Self { base_speed: 4.0 }
     }
 }
 pub struct PlayerCameraPlugin;
@@ -50,6 +50,10 @@ pub fn move_camera(
         }
         if input.any_pressed([KeyCode::S, KeyCode::Down]) {
             direction.y -= 1.0;
+        }
+
+        if direction.length() > 0.01 {
+            direction = direction.normalize();
         }
         transform.translation += direction * camera.base_speed * time.delta_seconds();
     }

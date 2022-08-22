@@ -1,6 +1,9 @@
 pub mod animate;
 pub mod camera;
 pub mod card;
+pub mod tile;
+
+use std::f32::consts::PI;
 
 use self::camera::PlayerCameraPlugin;
 use crate::game::card::{Card, CardBundle, CardColor, CardPlugin};
@@ -22,23 +25,24 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
+    asset_server.watch_for_changes().unwrap();
     // stage
-    commands.spawn_bundle(PbrBundle {
-        material: materials.add(StandardMaterial {
-            base_color: Color::rgb(0.6, 0.6, 0.6),
-            unlit: true,
-            ..default()
-        }),
-        transform: Transform::from_xyz(0.0, 0.0, -0.1),
-        mesh: meshes.add(
-            shape::Quad {
-                size: Vec2::new(8.0, 5.0),
-                ..default()
-            }
-            .into(),
-        ),
-        ..default()
-    });
+    // commands.spawn_bundle(PbrBundle {
+    //     material: materials.add(StandardMaterial {
+    //         base_color: Color::rgb(0.6, 0.6, 0.6),
+    //         unlit: true,
+    //         ..default()
+    //     }),
+    //     transform: Transform::from_xyz(0.0, 0.0, -0.1),
+    //     mesh: meshes.add(
+    //         shape::Quad {
+    //             size: Vec2::new(8.0, 5.0),
+    //             ..default()
+    //         }
+    //         .into(),
+    //     ),
+    //     ..default()
+    // });
 
     commands.spawn_bundle(CardBundle {
         transform: Transform::from_xyz(-1.0, 0.6, 0.0),
@@ -83,20 +87,107 @@ fn setup(
         ..default()
     });
 
-    // let shadow_projection_size = Vec2::new(30.0, 30.0);
+    let tile_mesh = meshes.add(
+        shape::Quad {
+            size: Vec2::new(3.0, 3.0),
+            ..default()
+        }
+        .into(),
+    );
+
+    let tile_material = materials.add(StandardMaterial {
+        base_color_texture: Some(asset_server.load("tile.png")),
+        base_color: Color::rgb_u8(90, 127, 90),
+        unlit: true,
+        depth_bias: -10.0,
+        alpha_mode: AlphaMode::Blend,
+        ..default()
+    });
+    commands.spawn_bundle(PbrBundle {
+        transform: Transform::from_xyz(0.0, 0.0, 0.0),
+        material: tile_material.clone(),
+        mesh: tile_mesh.clone(),
+        ..default()
+    });
+
+    commands.spawn_bundle(PbrBundle {
+        transform: Transform::from_xyz(3.0, 0.0, 0.0),
+        material: tile_material.clone(),
+        mesh: tile_mesh.clone(),
+        ..default()
+    });
+
+    commands.spawn_bundle(PbrBundle {
+        transform: Transform::from_xyz(-3.0, 0.0, 0.0),
+        material: tile_material.clone(),
+        mesh: tile_mesh.clone(),
+        ..default()
+    });
+
+    commands.spawn_bundle(PbrBundle {
+        transform: Transform::from_xyz(-3.0, 3.0, 0.0),
+        material: tile_material.clone(),
+        mesh: tile_mesh.clone(),
+        ..default()
+    });
+
+    commands.spawn_bundle(PbrBundle {
+        transform: Transform::from_xyz(-3.0, -3.0, 0.0),
+        material: tile_material.clone(),
+        mesh: tile_mesh.clone(),
+        ..default()
+    });
+
+    commands.spawn_bundle(PbrBundle {
+        transform: Transform::from_xyz(3.0, -3.0, 0.0),
+        material: tile_material.clone(),
+        mesh: tile_mesh.clone(),
+        ..default()
+    });
+
+    commands.spawn_bundle(PbrBundle {
+        transform: Transform::from_xyz(3.0, 3.0, 0.0),
+        material: tile_material.clone(),
+        mesh: tile_mesh.clone(),
+        ..default()
+    });
+
+    commands.spawn_bundle(PbrBundle {
+        transform: Transform::from_xyz(0.0, 3.0, 0.0),
+        material: tile_material.clone(),
+        mesh: tile_mesh.clone(),
+        ..default()
+    });
+
+    commands.spawn_bundle(PbrBundle {
+        transform: Transform::from_xyz(0.0, -3.0, 0.0),
+        material: tile_material.clone(),
+        mesh: tile_mesh.clone(),
+        ..default()
+    });
+
+    // 3d tiles
+    // commands.spawn_bundle(SceneBundle {
+    //     transform: Transform::from_xyz(0.0, 0.0, 0.0),
+    //     scene: asset_server.load("tile_base.glb#Scene0"),
+    //     ..default()
+    // });
+
+    // commands.spawn_bundle(SceneBundle {
+    //     transform: Transform::from_xyz(3.0, 0.0, 0.0),
+    //     scene: asset_server.load("tile_base.glb#Scene0"),
+    //     ..default()
+    // });
+
     // commands.spawn_bundle(DirectionalLightBundle {
-    //     transform: Transform::from_rotation(Quat::from_euler(EulerRot::ZYX, -0.6, 0.0, -1.0)),
+    //     transform: Transform::from_rotation(Quat::from_euler(
+    //         EulerRot::XYZ,
+    //         2. * PI * 1.98,
+    //         11.8,
+    //         0.0,
+    //     )),
     //     directional_light: DirectionalLight {
-    //         shadows_enabled: true,
-    //         shadow_projection: OrthographicProjection {
-    //             left: -shadow_projection_size.x / 2.0,
-    //             right: shadow_projection_size.x / 2.0,
-    //             bottom: -shadow_projection_size.y / 2.0,
-    //             top: shadow_projection_size.y / 2.0,
-    //             near: 0.01,
-    //             far: 100.0,
-    //             ..default()
-    //         },
+    //         shadows_enabled: false,
     //         ..default()
     //     },
     //     ..default()

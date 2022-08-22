@@ -36,6 +36,9 @@ pub struct Card {
 
 impl Card {
     const ASPECT_RATIO: f32 = 50.0 / 60.0;
+    const ART_WIDTH: f32 = 167.0;
+    const ART_HEIGHT: f32 = 166.0;
+    const ART_ASPECT: f32 = Self::ART_WIDTH / Self::ART_HEIGHT;
 }
 
 #[derive(Default, PartialEq, Eq, Copy, Clone)]
@@ -139,6 +142,24 @@ fn on_spawn_card(
                 ),
                 ..default()
             });
+            parent.spawn_bundle(PbrBundle {
+                material: materials.add(StandardMaterial {
+                    base_color: card.color.get_color(),
+                    base_color_texture: Some(asset_server.load("villager.png")),
+                    alpha_mode: AlphaMode::Blend,
+                    unlit: true,
+                    ..default()
+                }),
+                mesh: meshes.add(
+                    Quad {
+                        size: Vec2::new(Card::ART_ASPECT, 1.0) * 0.65,
+                        ..default()
+                    }
+                    .into(),
+                ),
+                transform: Transform::from_xyz(0.0, -0.08, 0.001),
+                ..default()
+            });
         });
     }
 }
@@ -226,7 +247,6 @@ fn collide_cards(
 
     for (ex, ey) in stack_x_on_y {
         let top = find_stack_top(&cards, ey);
-        println!("try stack {ex:?} {ey:?} top {top:?}");
         if let Ok([(mut cx, _), (mut ctop, _)]) = cards.get_many_mut([ex, top]) {
             if cx.stack_parent.is_none() && ctop.stack_child.is_none() {
                 ctop.stack_child = Some(ex);
