@@ -31,23 +31,6 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     asset_server.watch_for_changes().unwrap();
-    // stage
-    // commands.spawn_bundle(PbrBundle {
-    //     material: materials.add(StandardMaterial {
-    //         base_color: Color::rgb(0.6, 0.6, 0.6),
-    //         unlit: true,
-    //         ..default()
-    //     }),
-    //     transform: Transform::from_xyz(0.0, 0.0, -0.1),
-    //     mesh: meshes.add(
-    //         shape::Quad {
-    //             size: Vec2::new(8.0, 5.0),
-    //             ..default()
-    //         }
-    //         .into(),
-    //     ),
-    //     ..default()
-    // });
 
     commands.spawn_bundle(CardBundle {
         transform: Transform::from_xyz(-0.5, 0.0, 0.0),
@@ -74,32 +57,6 @@ fn setup(
         },
         ..default()
     });
-    // commands.spawn_bundle(CardBundle {
-    //     transform: Transform::from_xyz(1.0, 0.6, 0.0),
-    //     card: Card {
-    //         card_type: CardType::Villager,
-    //         ..default()
-    //     },
-    //     ..default()
-    // });
-
-    // commands.spawn_bundle(CardBundle {
-    //     transform: Transform::from_xyz(-0.5, -0.6, 0.0),
-    //     card: Card {
-    //         color: CardColor::Blue,
-    //         ..default()
-    //     },
-    //     ..default()
-    // });
-
-    // commands.spawn_bundle(CardBundle {
-    //     transform: Transform::from_xyz(0.5, -0.6, 0.0),
-    //     card: Card {
-    //         color: CardColor::Yellow,
-    //         ..default()
-    //     },
-    //     ..default()
-    // });
 
     let tile_mesh = meshes.add(
         shape::Quad {
@@ -180,31 +137,4 @@ fn setup(
         mesh: tile_mesh.clone(),
         ..default()
     });
-
-    // 3d tiles
-    // commands.spawn_bundle(SceneBundle {
-    //     transform: Transform::from_xyz(0.0, 0.0, 0.0),
-    //     scene: asset_server.load("tile_base.glb#Scene0"),
-    //     ..default()
-    // });
-
-    // commands.spawn_bundle(SceneBundle {
-    //     transform: Transform::from_xyz(3.0, 0.0, 0.0),
-    //     scene: asset_server.load("tile_base.glb#Scene0"),
-    //     ..default()
-    // });
-
-    // commands.spawn_bundle(DirectionalLightBundle {
-    //     transform: Transform::from_rotation(Quat::from_euler(
-    //         EulerRot::XYZ,
-    //         2. * PI * 1.98,
-    //         11.8,
-    //         0.0,
-    //     )),
-    //     directional_light: DirectionalLight {
-    //         shadows_enabled: false,
-    //         ..default()
-    //     },
-    //     ..default()
-    // });
 }
