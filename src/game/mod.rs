@@ -8,7 +8,7 @@ use std::f32::consts::PI;
 
 use self::camera::PlayerCameraPlugin;
 use crate::game::{
-    card::{Card, CardBundle, CardColor, CardPlugin},
+    card::{Card, CardBundle, CardPlugin, CardType},
     progress_bar::{ProgressBar, ProgressBarBundle, ProgressBarPlugin},
 };
 use bevy::prelude::*;
@@ -50,47 +50,47 @@ fn setup(
     // });
 
     commands.spawn_bundle(CardBundle {
-        transform: Transform::from_xyz(-1.0, 0.6, 0.0),
+        transform: Transform::from_xyz(-0.5, 0.0, 0.0),
         card: Card {
-            color: CardColor::Gray,
+            card_type: CardType::Villager,
             ..default()
         },
         ..default()
     });
     commands.spawn_bundle(CardBundle {
-        transform: Transform::from_xyz(0.0, 0.6, 0.0),
+        transform: Transform::from_xyz(0.5, 0.0, 0.0),
         card: Card {
-            color: CardColor::Gray,
+            card_type: CardType::Villager,
             ..default()
         },
         ..default()
     });
-    commands.spawn_bundle(CardBundle {
-        transform: Transform::from_xyz(1.0, 0.6, 0.0),
-        card: Card {
-            color: CardColor::Gray,
-            ..default()
-        },
-        ..default()
-    });
+    // commands.spawn_bundle(CardBundle {
+    //     transform: Transform::from_xyz(1.0, 0.6, 0.0),
+    //     card: Card {
+    //         card_type: CardType::Villager,
+    //         ..default()
+    //     },
+    //     ..default()
+    // });
 
-    commands.spawn_bundle(CardBundle {
-        transform: Transform::from_xyz(-0.5, -0.6, 0.0),
-        card: Card {
-            color: CardColor::Blue,
-            ..default()
-        },
-        ..default()
-    });
+    // commands.spawn_bundle(CardBundle {
+    //     transform: Transform::from_xyz(-0.5, -0.6, 0.0),
+    //     card: Card {
+    //         color: CardColor::Blue,
+    //         ..default()
+    //     },
+    //     ..default()
+    // });
 
-    commands.spawn_bundle(CardBundle {
-        transform: Transform::from_xyz(0.5, -0.6, 0.0),
-        card: Card {
-            color: CardColor::Yellow,
-            ..default()
-        },
-        ..default()
-    });
+    // commands.spawn_bundle(CardBundle {
+    //     transform: Transform::from_xyz(0.5, -0.6, 0.0),
+    //     card: Card {
+    //         color: CardColor::Yellow,
+    //         ..default()
+    //     },
+    //     ..default()
+    // });
 
     let tile_mesh = meshes.add(
         shape::Quad {
@@ -168,16 +168,6 @@ fn setup(
         transform: Transform::from_xyz(0.0, -3.0, 0.0),
         material: tile_material.clone(),
         mesh: tile_mesh.clone(),
-        ..default()
-    });
-    commands.spawn_bundle(ProgressBarBundle {
-        progress_bar: ProgressBar {
-            current: 60.0,
-            total: 100.0,
-            width: 2.0,
-            height: 0.15,
-            padding: 0.05,
-        },
         ..default()
     });
 

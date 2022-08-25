@@ -19,7 +19,15 @@ pub struct ProgressBar {
 }
 
 impl ProgressBar {
-    const Z: f32 = 0.3;
+    const Z: f32 = 0.1;
+    pub fn finished(&self) -> bool {
+        self.current >= self.total
+    }
+
+    pub fn add(&mut self, amount: f32) {
+        self.current += amount;
+        self.current = self.current.min(self.total);
+    }
 }
 
 #[derive(Component, Default)]

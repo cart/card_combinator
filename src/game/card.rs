@@ -1,11 +1,12 @@
 use std::time::Duration;
 
 use bevy::prelude::{shape::Quad, *};
-use bevy::utils::HashSet;
+use bevy::utils::{Entry, HashMap, HashSet};
 use bevy_rapier3d::prelude::*;
 
 use crate::game::animate::{AnimateRange, Ease};
 use crate::game::camera::PlayerCamera;
+use crate::game::progress_bar::{ProgressBar, ProgressBarBundle};
 
 pub struct CardPlugin;
 
@@ -21,14 +22,15 @@ impl Plugin for CardPlugin {
                     .after(crate::game::camera::move_camera)
                     .after(collide_cards),
             )
-            .add_system(move_cards.after(select_card));
+            .add_system(move_cards.after(select_card))
+            .add_system(evaluate_stacks.after(move_cards));
     }
 }
 
 #[derive(Component, Default)]
 pub struct Card {
     pub animations: Animations,
-    pub color: CardColor,
+    pub card_type: CardType,
     pub z: usize,
     pub stack_parent: Option<Entity>,
     pub stack_child: Option<Entity>,
@@ -39,6 +41,40 @@ impl Card {
     const ART_WIDTH: f32 = 167.0;
     const ART_HEIGHT: f32 = 166.0;
     const ART_ASPECT: f32 = Self::ART_WIDTH / Self::ART_HEIGHT;
+}
+
+#[derive(Default, Copy, Clone, Hash, PartialEq, Eq, Debug)]
+pub enum CardType {
+    #[default]
+    Villager,
+}
+
+impl CardType {
+    pub fn class(self) -> CardClass {
+        match self {
+            CardType::Villager => CardClass::Character,
+        }
+    }
+
+    pub fn image(self) -> &'static str {
+        match self {
+            CardType::Villager => "villager.png",
+        }
+    }
+}
+
+pub enum CardClass {
+    Character,
+}
+
+impl CardClass {
+    pub fn color(self) -> Color {
+        match self {
+            CardClass::Character => Color::rgb(0.4, 0.4, 0.4),
+            // CardColor::Blue => Color::rgb(0.4, 0.4, 1.0),
+            // CardColor::Yellow => Color::rgb(0.7, 0.7, 0.4),
+        }
+    }
 }
 
 #[derive(Default, PartialEq, Eq, Copy, Clone)]
@@ -64,24 +100,6 @@ pub enum HoverPoint {
     None,
 }
 
-#[derive(Default, Copy, Clone)]
-pub enum CardColor {
-    #[default]
-    Gray,
-    Blue,
-    Yellow,
-}
-
-impl CardColor {
-    fn get_color(self) -> Color {
-        match self {
-            CardColor::Gray => Color::rgb(0.4, 0.4, 0.4),
-            CardColor::Blue => Color::rgb(0.4, 0.4, 1.0),
-            CardColor::Yellow => Color::rgb(0.7, 0.7, 0.4),
-        }
-    }
-}
-
 #[derive(Bundle)]
 pub struct CardBundle {
     pub card: Card,
@@ -96,8 +114,18 @@ pub struct CardBundle {
     pub computed_visibiltiy: ComputedVisibility,
 }
 
-#[derive(Deref, DerefMut, Default)]
-pub struct StackRoots(HashSet<Entity>);
+#[derive(Debug)]
+pub enum StackType {
+    Pending,
+    Nothing,
+    Breed { progress_bar: Entity },
+}
+
+#[derive(Default)]
+pub struct StackRoots {
+    roots: HashMap<Entity, StackType>,
+    queued_stack_recomputations: HashSet<Entity>,
+}
 
 impl Default for CardBundle {
     fn default() -> Self {
@@ -127,7 +155,7 @@ fn on_spawn_card(
         commands.entity(entity).with_children(|parent| {
             parent.spawn_bundle(PbrBundle {
                 material: materials.add(StandardMaterial {
-                    base_color: card.color.get_color(),
+                    base_color: card.card_type.class().color(),
                     base_color_texture: Some(asset_server.load("card_base.png")),
                     alpha_mode: AlphaMode::Blend,
                     unlit: true,
@@ -144,8 +172,8 @@ fn on_spawn_card(
             });
             parent.spawn_bundle(PbrBundle {
                 material: materials.add(StandardMaterial {
-                    base_color: card.color.get_color(),
-                    base_color_texture: Some(asset_server.load("villager.png")),
+                    base_color: card.card_type.class().color(),
+                    base_color_texture: Some(asset_server.load(card.card_type.image())),
                     alpha_mode: AlphaMode::Blend,
                     unlit: true,
                     ..default()
@@ -185,7 +213,7 @@ fn move_cards(
         transform.translation.z = z_offset;
     }
 
-    for root in stack_roots.iter() {
+    for root in stack_roots.roots.keys() {
         let result = cards
             .get(*root)
             .ok()
@@ -220,7 +248,8 @@ fn collide_cards(
     mut collisions: EventReader<CollisionEvent>,
     mut stack_roots: ResMut<StackRoots>,
     mut selected: Res<SelectedCard>,
-    mut cards: Query<(&mut Card, &Transform)>,
+    mut cards: Query<&mut Card>,
+    transforms: Query<&Transform>,
 ) {
     let mut stack_x_on_y = Vec::new();
     for collision in collisions.iter() {
@@ -229,7 +258,9 @@ fn collide_cards(
                 if selected.is_selected(e1) || selected.is_selected(e2) {
                     continue;
                 }
-                if let Ok([(mut c1, t1), (mut c2, t2)]) = cards.get_many_mut([e1, e2]) {
+                if let (Ok([mut c1, mut c2]), Ok([t1, t2])) =
+                    (cards.get_many_mut([e1, e2]), transforms.get_many([e1, e2]))
+                {
                     if t1.translation.z > t2.translation.z {
                         if c1.stack_parent.is_none() {
                             stack_x_on_y.push((e1, e2));
@@ -246,24 +277,57 @@ fn collide_cards(
     }
 
     for (ex, ey) in stack_x_on_y {
-        let top = find_stack_top(&cards, ey);
-        if let Ok([(mut cx, _), (mut ctop, _)]) = cards.get_many_mut([ex, top]) {
+        let top = find_stack_top(&cards.to_readonly(), ey);
+        if let Ok([mut cx, mut ctop]) = cards.get_many_mut([ex, top]) {
             if cx.stack_parent.is_none() && ctop.stack_child.is_none() {
+                // update pointers
                 ctop.stack_child = Some(ex);
                 cx.stack_parent = Some(top);
-                if ctop.stack_parent.is_none() {
-                    stack_roots.insert(top);
+
+                match stack_roots.roots.entry(top) {
+                    // if stack root is already a stack, queue recalculation
+                    Entry::Occupied(_) => {
+                        stack_roots.queued_stack_recomputations.insert(top);
+                    }
+                    // if parent is newly stacked, make it a stack root and recompute
+                    Entry::Vacant(mut entry) => {
+                        entry.insert(StackType::Pending);
+                        stack_roots.queued_stack_recomputations.insert(top);
+                    }
+                }
+
+                match stack_roots.roots.entry(ex) {
+                    // if newly stacked card is a stack, queue it for recomputation (and therefore removal)
+                    Entry::Occupied(_) => {
+                        stack_roots.queued_stack_recomputations.insert(ex);
+                    }
+                    // if newly stacked card is not a stack, do nothing
+                    Entry::Vacant(_) => {}
                 }
             }
         }
     }
 }
 
-fn find_stack_top(cards: &Query<(&mut Card, &Transform)>, mut current_entity: Entity) -> Entity {
+fn find_stack_top(cards: &Query<&Card>, mut current_entity: Entity) -> Entity {
     loop {
-        if let Ok((card, _)) = cards.get(current_entity) {
+        if let Ok(card) = cards.get(current_entity) {
             if let Some(child) = card.stack_child {
                 current_entity = child;
+            } else {
+                return current_entity;
+            }
+        } else {
+            return current_entity;
+        }
+    }
+}
+
+fn find_stack_root(cards: &Query<&Card>, mut current_entity: Entity) -> Entity {
+    loop {
+        if let Ok(card) = cards.get(current_entity) {
+            if let Some(parent) = card.stack_parent {
+                current_entity = parent;
             } else {
                 return current_entity;
             }
@@ -318,25 +382,27 @@ fn select_card(
             let result = context.cast_ray(near, direction, 50.0, true, QueryFilter::new());
 
             if let Some((entity, toi)) = result {
-                let parent = {
+                let (parent, child) = {
                     let mut card = cards.get_mut(entity).unwrap();
                     card.animations.select.reset();
                     *selected_card = SelectedCard::Some(entity);
-                    // begin unstack
-                    stack_roots.insert(entity);
                     let parent = card.stack_parent;
                     card.stack_parent = None;
-                    parent
+                    (parent, card.stack_child)
                 };
                 // finish unstack
                 if let Some(parent) = parent {
                     let mut card = cards.get_mut(parent).unwrap();
                     card.stack_child = None;
-                    if card.stack_parent.is_none() {
-                        stack_roots.remove(&parent);
+                    // queue parent for recomputation
+                    stack_roots.queued_stack_recomputations.insert(parent);
+
+                    // unstacked card is now a stack root, create a new stack root as pending and recompute
+                    if child.is_some() {
+                        stack_roots.roots.insert(entity, StackType::Pending);
+                        stack_roots.queued_stack_recomputations.insert(entity);
                     }
                 }
-                return;
             }
         }
     }
@@ -348,6 +414,126 @@ fn select_card(
             *selected_card = SelectedCard::None;
         }
     }
+}
+
+fn evaluate_stacks(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut stack_roots: ResMut<StackRoots>,
+    cards: Query<&Card>,
+    mut progress_bars: Query<&mut ProgressBar>,
+    transforms: Query<&Transform>,
+) {
+    let stack_roots = &mut *stack_roots;
+    for entity in stack_roots.queued_stack_recomputations.drain() {
+        let root = find_stack_root(&cards, entity);
+        let mut cancelled_stack_types = Vec::new();
+        if root != entity {
+            // if the queued entity is no longer a root, remove the root and cancel the current stack_type
+            if let Some(stack_type) = stack_roots.roots.remove(&entity) {
+                cancelled_stack_types.push(stack_type);
+            }
+        }
+        // if the queued root is still a root, recompute the stack type
+        let card_types = get_cards_types(root, &cards);
+        let villagers = card_types.get(&CardType::Villager).unwrap_or(&0);
+        let new_stack_type = if *villagers == 2 && card_types.len() == 1 {
+            let mut progress_bar = None;
+            commands.entity(root).with_children(|parent| {
+                progress_bar = Some(
+                    parent
+                        .spawn_bundle(ProgressBarBundle {
+                            progress_bar: ProgressBar {
+                                current: 0.0,
+                                total: 5.0,
+                                width: 0.7,
+                                height: 0.15,
+                                padding: 0.05,
+                            },
+                            transform: Transform::from_xyz(0.0, 0.55, 0.0),
+                            ..default()
+                        })
+                        .id(),
+                );
+            });
+            StackType::Breed {
+                progress_bar: progress_bar.unwrap(),
+            }
+        } else {
+            StackType::Nothing
+        };
+
+        // insert the new stack type and cancel the old one, if it exists
+        if let Some(stack_type) = stack_roots.roots.insert(root, new_stack_type) {
+            cancelled_stack_types.push(stack_type);
+        }
+
+        for stack_type in cancelled_stack_types {
+            match stack_type {
+                StackType::Pending => {}
+                StackType::Nothing => {}
+                StackType::Breed { progress_bar } => {
+                    commands.entity(progress_bar).despawn_recursive();
+                }
+            }
+        }
+    }
+
+    let mut queued_recomputations = Vec::new();
+    for (root, stack_type) in stack_roots.roots.iter_mut() {
+        let mut should_reset = false;
+        match stack_type {
+            StackType::Pending => {}
+            StackType::Nothing => {}
+            StackType::Breed { progress_bar } => {
+                if let Ok(mut bar) = progress_bars.get_mut(*progress_bar) {
+                    bar.add(time.delta_seconds());
+                    if bar.finished() {
+                        commands.entity(*progress_bar).despawn_recursive();
+                        if let Ok(transform) = transforms.get(*root) {
+                            commands.spawn_bundle(CardBundle {
+                                card: Card {
+                                    card_type: CardType::Villager,
+                                    ..default()
+                                },
+                                transform: Transform::from_xyz(
+                                    transform.translation.x + 1.0,
+                                    transform.translation.y + 1.0,
+                                    0.0,
+                                ),
+                                ..default()
+                            });
+                        }
+                        should_reset = true;
+                    }
+                }
+            }
+        }
+        if should_reset {
+            *stack_type = StackType::Pending;
+            queued_recomputations.push(*root);
+        }
+    }
+
+    stack_roots
+        .queued_stack_recomputations
+        .extend(queued_recomputations);
+}
+
+fn get_cards_types(root: Entity, cards: &Query<&Card>) -> HashMap<CardType, usize> {
+    let mut current = root;
+    let mut card_types = HashMap::new();
+    while let Ok(card) = cards.get(current) {
+        let mut count = card_types.entry(card.card_type).or_insert(0);
+        *count += 1;
+        if let Some(child) = card.stack_child {
+            current = child;
+        } else {
+            break;
+        }
+    }
+
+    card_types
 }
 
 pub struct Animations {
