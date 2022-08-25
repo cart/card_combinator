@@ -65,6 +65,15 @@ fn setup(
         },
         ..default()
     });
+
+    commands.spawn_bundle(CardBundle {
+        transform: Transform::from_xyz(1.0, 0.0, 0.0),
+        card: Card {
+            card_type: CardType::Log,
+            ..default()
+        },
+        ..default()
+    });
     // commands.spawn_bundle(CardBundle {
     //     transform: Transform::from_xyz(1.0, 0.6, 0.0),
     //     card: Card {
@@ -101,13 +110,14 @@ fn setup(
     );
 
     let tile_material = materials.add(StandardMaterial {
-        base_color_texture: Some(asset_server.load("tile.png")),
-        base_color: Color::rgb_u8(90, 127, 90),
+        base_color_texture: Some(asset_server.load("tile_woods.png")),
+        base_color: Color::rgb_u8(90, 110, 90),
         unlit: true,
         depth_bias: -10.0,
         alpha_mode: AlphaMode::Blend,
         ..default()
     });
+
     commands.spawn_bundle(PbrBundle {
         transform: Transform::from_xyz(0.0, 0.0, 0.0),
         material: tile_material.clone(),

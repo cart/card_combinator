@@ -48,32 +48,36 @@ impl Card {
 pub enum CardType {
     #[default]
     Villager,
+    Log,
 }
 
 impl CardType {
     pub fn class(self) -> CardClass {
         match self {
             CardType::Villager => CardClass::Character,
+            CardType::Log => CardClass::Resource,
         }
     }
 
     pub fn image(self) -> &'static str {
         match self {
             CardType::Villager => "villager.png",
+            CardType::Log => "log.png",
         }
     }
 }
 
 pub enum CardClass {
     Character,
+    Resource,
 }
 
 impl CardClass {
     pub fn color(self) -> Color {
         match self {
             CardClass::Character => Color::rgb(0.4, 0.4, 0.4),
+            CardClass::Resource => Color::rgb(0.7, 0.7, 0.4),
             // CardColor::Blue => Color::rgb(0.4, 0.4, 1.0),
-            // CardColor::Yellow => Color::rgb(0.7, 0.7, 0.4),
         }
     }
 }
