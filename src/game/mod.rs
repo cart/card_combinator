@@ -10,6 +10,7 @@ use self::camera::PlayerCameraPlugin;
 use crate::game::{
     card::{Card, CardBundle, CardPlugin, CardType},
     progress_bar::{ProgressBar, ProgressBarBundle, ProgressBarPlugin},
+    tile::TilePlugin,
 };
 use bevy::prelude::*;
 
@@ -20,6 +21,7 @@ impl Plugin for GamePlugin {
         app.add_plugin(CardPlugin)
             .add_plugin(PlayerCameraPlugin)
             .add_plugin(ProgressBarPlugin)
+            .add_plugin(TilePlugin)
             .add_startup_system(setup);
     }
 }
@@ -55,86 +57,6 @@ fn setup(
             card_type: CardType::Log,
             ..default()
         },
-        ..default()
-    });
-
-    let tile_mesh = meshes.add(
-        shape::Quad {
-            size: Vec2::new(3.0, 3.0),
-            ..default()
-        }
-        .into(),
-    );
-
-    let tile_material = materials.add(StandardMaterial {
-        base_color_texture: Some(asset_server.load("tile_woods.png")),
-        base_color: Color::rgb_u8(90, 110, 90),
-        unlit: true,
-        depth_bias: -10.0,
-        alpha_mode: AlphaMode::Blend,
-        ..default()
-    });
-
-    commands.spawn_bundle(PbrBundle {
-        transform: Transform::from_xyz(0.0, 0.0, 0.0),
-        material: tile_material.clone(),
-        mesh: tile_mesh.clone(),
-        ..default()
-    });
-
-    commands.spawn_bundle(PbrBundle {
-        transform: Transform::from_xyz(3.0, 0.0, 0.0),
-        material: tile_material.clone(),
-        mesh: tile_mesh.clone(),
-        ..default()
-    });
-
-    commands.spawn_bundle(PbrBundle {
-        transform: Transform::from_xyz(-3.0, 0.0, 0.0),
-        material: tile_material.clone(),
-        mesh: tile_mesh.clone(),
-        ..default()
-    });
-
-    commands.spawn_bundle(PbrBundle {
-        transform: Transform::from_xyz(-3.0, 3.0, 0.0),
-        material: tile_material.clone(),
-        mesh: tile_mesh.clone(),
-        ..default()
-    });
-
-    commands.spawn_bundle(PbrBundle {
-        transform: Transform::from_xyz(-3.0, -3.0, 0.0),
-        material: tile_material.clone(),
-        mesh: tile_mesh.clone(),
-        ..default()
-    });
-
-    commands.spawn_bundle(PbrBundle {
-        transform: Transform::from_xyz(3.0, -3.0, 0.0),
-        material: tile_material.clone(),
-        mesh: tile_mesh.clone(),
-        ..default()
-    });
-
-    commands.spawn_bundle(PbrBundle {
-        transform: Transform::from_xyz(3.0, 3.0, 0.0),
-        material: tile_material.clone(),
-        mesh: tile_mesh.clone(),
-        ..default()
-    });
-
-    commands.spawn_bundle(PbrBundle {
-        transform: Transform::from_xyz(0.0, 3.0, 0.0),
-        material: tile_material.clone(),
-        mesh: tile_mesh.clone(),
-        ..default()
-    });
-
-    commands.spawn_bundle(PbrBundle {
-        transform: Transform::from_xyz(0.0, -3.0, 0.0),
-        material: tile_material.clone(),
-        mesh: tile_mesh.clone(),
         ..default()
     });
 }
