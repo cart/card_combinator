@@ -41,6 +41,7 @@ impl Card {
     const ART_WIDTH: f32 = 167.0;
     const ART_HEIGHT: f32 = 166.0;
     const ART_ASPECT: f32 = Self::ART_WIDTH / Self::ART_HEIGHT;
+    const SPAWN_OFFSET: f32 = 1.0;
 }
 
 #[derive(Default, Copy, Clone, Hash, PartialEq, Eq, Debug)]
@@ -497,8 +498,8 @@ fn evaluate_stacks(
                                     ..default()
                                 },
                                 transform: Transform::from_xyz(
-                                    transform.translation.x + 1.0,
-                                    transform.translation.y + 1.0,
+                                    transform.translation.x + Card::SPAWN_OFFSET,
+                                    transform.translation.y,
                                     0.0,
                                 ),
                                 ..default()
