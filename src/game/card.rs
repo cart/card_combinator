@@ -15,6 +15,7 @@ impl Plugin for CardPlugin {
         app.init_resource::<SelectedCard>()
             .init_resource::<HoverPoint>()
             .init_resource::<StackRoots>()
+            .init_resource::<CardData>()
             .add_system_to_stage(CoreStage::PostUpdate, on_spawn_card)
             .add_system(collide_cards)
             .add_system(
@@ -54,32 +55,15 @@ pub enum CardType {
 impl CardType {
     pub fn class(self) -> CardClass {
         match self {
-            CardType::Villager => CardClass::Character,
+            CardType::Villager => CardClass::Villager,
             CardType::Log => CardClass::Resource,
-        }
-    }
-
-    pub fn image(self) -> &'static str {
-        match self {
-            CardType::Villager => "villager.png",
-            CardType::Log => "log.png",
         }
     }
 }
 
 pub enum CardClass {
-    Character,
+    Villager,
     Resource,
-}
-
-impl CardClass {
-    pub fn color(self) -> Color {
-        match self {
-            CardClass::Character => Color::rgb(0.4, 0.4, 0.4),
-            CardClass::Resource => Color::rgb(0.7, 0.7, 0.4),
-            // CardColor::Blue => Color::rgb(0.4, 0.4, 1.0),
-        }
-    }
 }
 
 #[derive(Default, PartialEq, Eq, Copy, Clone)]
@@ -149,47 +133,94 @@ impl Default for CardBundle {
     }
 }
 
+pub struct CardData {
+    mesh: Handle<Mesh>,
+    portrait_mesh: Handle<Mesh>,
+    villager_base: Handle<StandardMaterial>,
+    resource_base: Handle<StandardMaterial>,
+    villager_portrait_base: Handle<StandardMaterial>,
+    log_portrait_base: Handle<StandardMaterial>,
+}
+
+impl FromWorld for CardData {
+    fn from_world(world: &mut World) -> Self {
+        let world = world.cell();
+        let mut meshes = world.resource_mut::<Assets<Mesh>>();
+        let mut materials = world.resource_mut::<Assets<StandardMaterial>>();
+        let asset_server = world.resource::<AssetServer>();
+        let card_base_material = StandardMaterial {
+            unlit: true,
+            alpha_mode: AlphaMode::Blend,
+            base_color_texture: Some(asset_server.load("card_base.png")),
+            ..default()
+        };
+        let villager_base = StandardMaterial {
+            base_color: Color::rgb(0.4, 0.4, 0.4),
+            ..card_base_material.clone()
+        };
+        let resource_base = StandardMaterial {
+            base_color: Color::rgb(0.7, 0.7, 0.4),
+            ..card_base_material.clone()
+        };
+        Self {
+            mesh: meshes.add(
+                Quad {
+                    size: Vec2::new(Card::ASPECT_RATIO, 1.0),
+                    ..default()
+                }
+                .into(),
+            ),
+            portrait_mesh: meshes.add(
+                Quad {
+                    size: Vec2::new(Card::ART_ASPECT, 1.0) * 0.65,
+                    ..default()
+                }
+                .into(),
+            ),
+            villager_portrait_base: materials.add(StandardMaterial {
+                base_color_texture: Some(asset_server.load("villager.png")),
+                ..villager_base.clone()
+            }),
+            log_portrait_base: materials.add(StandardMaterial {
+                base_color_texture: Some(asset_server.load("log.png")),
+                ..resource_base.clone()
+            }),
+            villager_base: materials.add(villager_base),
+            resource_base: materials.add(resource_base),
+        }
+    }
+}
+
+impl CardData {
+    pub fn class_material(&self, card_class: CardClass) -> Handle<StandardMaterial> {
+        match card_class {
+            CardClass::Villager => self.villager_base.clone(),
+            CardClass::Resource => self.resource_base.clone(),
+        }
+    }
+    pub fn portrait_material(&self, card_type: CardType) -> Handle<StandardMaterial> {
+        match card_type {
+            CardType::Villager => self.villager_portrait_base.clone(),
+            CardType::Log => self.log_portrait_base.clone(),
+        }
+    }
+}
+
 fn on_spawn_card(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    card_data: Res<CardData>,
     cards: Query<(Entity, &Card), Added<Card>>,
 ) {
     for (entity, card) in &cards {
         commands.entity(entity).with_children(|parent| {
             parent.spawn_bundle(PbrBundle {
-                material: materials.add(StandardMaterial {
-                    base_color: card.card_type.class().color(),
-                    base_color_texture: Some(asset_server.load("card_base.png")),
-                    alpha_mode: AlphaMode::Blend,
-                    unlit: true,
-                    ..default()
-                }),
-                mesh: meshes.add(
-                    Quad {
-                        size: Vec2::new(Card::ASPECT_RATIO, 1.0),
-                        ..default()
-                    }
-                    .into(),
-                ),
+                material: card_data.class_material(card.card_type.class()),
+                mesh: card_data.mesh.clone(),
                 ..default()
             });
             parent.spawn_bundle(PbrBundle {
-                material: materials.add(StandardMaterial {
-                    base_color: card.card_type.class().color(),
-                    base_color_texture: Some(asset_server.load(card.card_type.image())),
-                    alpha_mode: AlphaMode::Blend,
-                    unlit: true,
-                    ..default()
-                }),
-                mesh: meshes.add(
-                    Quad {
-                        size: Vec2::new(Card::ART_ASPECT, 1.0) * 0.65,
-                        ..default()
-                    }
-                    .into(),
-                ),
+                material: card_data.portrait_material(card.card_type),
+                mesh: card_data.portrait_mesh.clone(),
                 transform: Transform::from_xyz(0.0, -0.08, 0.001),
                 ..default()
             });
