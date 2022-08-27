@@ -35,6 +35,7 @@ pub struct Card {
     pub z: usize,
     pub stack_parent: Option<Entity>,
     pub stack_child: Option<Entity>,
+    pub tile_slot: Option<Entity>,
 }
 
 impl Card {
@@ -373,7 +374,7 @@ fn find_stack_root(cards: &Query<&Card>, mut current_entity: Entity) -> Entity {
     }
 }
 
-fn select_card(
+pub fn select_card(
     context: Res<RapierContext>,
     windows: Res<Windows>,
     mut selected_card: ResMut<SelectedCard>,
