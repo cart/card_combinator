@@ -64,14 +64,13 @@ impl Tile {
 #[derive(Component, Default, Clone, Copy, PartialEq, Eq, Deref, DerefMut)]
 pub struct TileGridLocation(IVec2);
 
-#[derive(Component, Default)]
-pub struct TileSlotEffect(Option<Entity>);
+#[derive(Component)]
+pub struct TileSlotEffect(Entity);
 
 #[derive(Bundle, Default)]
 pub struct TileBundle {
     pub tile: Tile,
     pub tile_grid_location: TileGridLocation,
-    pub tile_slot: TileSlotEffect,
     pub transform: Transform,
     pub global_transform: GlobalTransform,
     pub visibility: Visibility,
@@ -134,20 +133,12 @@ fn on_spawn_tile(
     asset_server: Res<AssetServer>,
     tile_data: Res<TileData>,
     mut tile_grid: ResMut<TileGrid>,
-    mut tiles: Query<
-        (
-            Entity,
-            &Tile,
-            &TileGridLocation,
-            &mut TileSlotEffect,
-            &mut Transform,
-        ),
-        Added<Tile>,
-    >,
+    mut tiles: Query<(Entity, &Tile, &TileGridLocation, &mut Transform), Added<Tile>>,
 ) {
-    for (entity, tile, location, mut tile_slot, mut transform) in &mut tiles {
+    for (entity, tile, location, mut transform) in &mut tiles {
         tile_grid.insert(location.0, entity);
         transform.translation = Tile::grid_to_translation(location.0);
+        let mut tile_slot = None;
         commands.entity(entity).with_children(|parent| {
             parent.spawn_bundle(PbrBundle {
                 material: match tile {
@@ -156,18 +147,21 @@ fn on_spawn_tile(
                 mesh: tile_data.mesh.clone(),
                 ..default()
             });
-            tile_slot.0 = Some(
+            tile_slot = Some(
                 parent
                     .spawn_bundle(PbrBundle {
                         material: tile_data.tile_slot_material.clone(),
                         mesh: tile_data.tile_slot_mesh.clone(),
-                        transform: Transform::from_xyz(0.0, -0.08, 0.001),
+                        transform: Transform::from_xyz(0.0, 0.0, 0.001),
                         visibility: Visibility { is_visible: false },
                         ..default()
                     })
                     .id(),
             );
         });
+        commands
+            .entity(entity)
+            .insert(TileSlotEffect(tile_slot.unwrap()));
     }
 }
 
@@ -182,11 +176,18 @@ pub fn hover_tile(
     selected_card: Res<SelectedCard>,
     mut visibilities: Query<&mut Visibility>,
     tile_slots: Query<&TileSlotEffect>,
+    tiles: Query<(&Tile, &TileSlotEffect)>,
 ) {
     if let Some(tile_entity) = hovered_tile.0 {
-        if let Some(tile_slot) = tile_slots.get(tile_entity).unwrap().0 {
-            if let Ok(mut visibility) = visibilities.get_mut(tile_slot) {
-                visibility.is_visible = false;
+        let tile_slot = tile_slots.get(tile_entity).unwrap();
+        let mut visibility = visibilities.get_mut(tile_slot.0).unwrap();
+        visibility.is_visible = false;
+    }
+    for (tile, tile_slot) in tiles.iter() {
+        match tile {
+            Tile::Woods { slotted_card } => {
+                let mut visibility = visibilities.get_mut(tile_slot.0).unwrap();
+                visibility.is_visible = slotted_card.is_some();
             }
         }
     }
@@ -196,11 +197,9 @@ pub fn hover_tile(
             let location = Tile::translation_to_grid(point);
             if let Some(tile_entity) = tile_grid.get(&location) {
                 hovered_tile.0 = Some(*tile_entity);
-                if let Some(tile_slot) = tile_slots.get(*tile_entity).unwrap().0 {
-                    if let Ok(mut visibility) = visibilities.get_mut(tile_slot) {
-                        visibility.is_visible = true;
-                    }
-                }
+                let tile_slot = tile_slots.get(*tile_entity).unwrap().0;
+                let mut visibility = visibilities.get_mut(tile_slot).unwrap();
+                visibility.is_visible = true;
             } else {
                 hovered_tile.0 = None;
             }

@@ -72,6 +72,7 @@ impl CardType {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub enum CardClass {
     Villager,
     Resource,
@@ -333,7 +334,7 @@ fn collide_cards(
     for (ex, ey) in stack_x_on_y {
         let top = find_stack_top(&cards.to_readonly(), ey);
         if let Ok([mut cx, mut ctop]) = cards.get_many_mut([ex, top]) {
-            if cx.stack_parent.is_none() && ctop.stack_child.is_none() {
+            if cx.stack_parent.is_none() && ctop.stack_child.is_none() && ctop.is_stackable() {
                 // update pointers
                 ctop.stack_child = Some(ex);
                 cx.stack_parent = Some(top);
@@ -487,7 +488,9 @@ pub fn select_card(
                             {
                                 match &mut *tile {
                                     Tile::Woods { slotted_card } => {
-                                        if slotted_card.is_none() {
+                                        if slotted_card.is_none()
+                                            && card.card_type.class() == CardClass::Villager
+                                        {
                                             *slotted_card = Some(entity);
                                             card.slotted_in_tile = Some(tile_entity);
                                         }
