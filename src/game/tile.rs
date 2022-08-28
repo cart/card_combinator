@@ -1,7 +1,10 @@
 use bevy::{prelude::*, utils::HashMap};
 use bevy_rapier3d::prelude::Collider;
 
-use crate::game::card::{Card, HoverPoint, SelectedCard};
+use crate::game::{
+    card::{Card, CardBundle, CardType, HoverPoint, SelectedCard},
+    progress_bar::{ProgressBar, ProgressBarStatus},
+};
 
 pub struct TilePlugin;
 
@@ -12,7 +15,8 @@ impl Plugin for TilePlugin {
             .init_resource::<HoveredTile>()
             .add_startup_system(spawn_tiles)
             .add_system_to_stage(CoreStage::PostUpdate, on_spawn_tile)
-            .add_system(hover_tile.after(crate::game::card::select_card));
+            .add_system(hover_tile.after(crate::game::card::select_card))
+            .add_system(evaluate_tiles.after(hover_tile));
     }
 }
 
@@ -20,7 +24,10 @@ fn spawn_tiles(mut commands: Commands, tile_data: Res<TileData>) {
     for x in -1..2 {
         for y in -1..2 {
             commands.spawn_bundle(TileBundle {
-                tile: Tile::Woods { slotted_card: None },
+                tile: Tile::Woods {
+                    slotted_villager: None,
+                    progress_bar: None,
+                },
                 tile_grid_location: TileGridLocation(IVec2::new(x, y)),
                 ..default()
             });
@@ -30,12 +37,18 @@ fn spawn_tiles(mut commands: Commands, tile_data: Res<TileData>) {
 
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 pub enum Tile {
-    Woods { slotted_card: Option<Entity> },
+    Woods {
+        slotted_villager: Option<Entity>,
+        progress_bar: Option<Entity>,
+    },
 }
 
 impl Default for Tile {
     fn default() -> Self {
-        Self::Woods { slotted_card: None }
+        Self::Woods {
+            slotted_villager: None,
+            progress_bar: None,
+        }
     }
 }
 
@@ -44,6 +57,7 @@ impl Tile {
     pub const OFFSET: Vec2 = Vec2::from_array([-0.05, -0.05]);
     pub const TILE_SLOT_ASPECT_RATIO: f32 = 50.0 / 60.0;
     pub const TILE_SLOT_SIZE: f32 = 1.2;
+    pub const SPAWN_OFFSET: f32 = 0.95;
 
     pub fn grid_to_translation(grid_location: IVec2) -> Vec3 {
         (grid_location.as_vec2() * (Self::SIZE + Self::OFFSET)).extend(0.0)
@@ -185,7 +199,10 @@ pub fn hover_tile(
     }
     for (tile, tile_slot) in tiles.iter() {
         match tile {
-            Tile::Woods { slotted_card } => {
+            Tile::Woods {
+                slotted_villager: slotted_card,
+                ..
+            } => {
                 let mut visibility = visibilities.get_mut(tile_slot.0).unwrap();
                 visibility.is_visible = slotted_card.is_some();
             }
@@ -205,6 +222,43 @@ pub fn hover_tile(
             }
         } else {
             hovered_tile.0 = None;
+        }
+    }
+}
+
+fn evaluate_tiles(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut tiles: Query<(&mut Tile, &Transform)>,
+    mut progress_bars: Query<&mut ProgressBar>,
+) {
+    for (mut tile, transform) in &mut tiles {
+        match &mut *tile {
+            Tile::Woods {
+                slotted_villager,
+                progress_bar,
+            } => {
+                if let Some(bar_entity) = *progress_bar {
+                    if let Ok(mut bar) = progress_bars.get_mut(bar_entity) {
+                        bar.add(time.delta_seconds());
+                        if bar.finished() {
+                            commands.spawn_bundle(CardBundle {
+                                card: Card {
+                                    card_type: CardType::Log,
+                                    ..default()
+                                },
+                                transform: Transform::from_xyz(
+                                    transform.translation.x + Tile::SPAWN_OFFSET,
+                                    transform.translation.y,
+                                    0.0,
+                                ),
+                                ..default()
+                            });
+                            bar.reset();
+                        }
+                    }
+                }
+            }
         }
     }
 }

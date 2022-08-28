@@ -51,12 +51,12 @@ fn setup(
         ..default()
     });
 
-    commands.spawn_bundle(CardBundle {
-        transform: Transform::from_xyz(1.0, 0.0, 0.0),
-        card: Card {
-            card_type: CardType::Log,
-            ..default()
-        },
-        ..default()
-    });
+    // commands.spawn_bundle(CardBundle {
+    //     transform: Transform::from_xyz(1.0, 0.0, 0.0),
+    //     card: Card {
+    //         card_type: CardType::Log,
+    //         ..default()
+    //     },
+    //     ..default()
+    // });
 }

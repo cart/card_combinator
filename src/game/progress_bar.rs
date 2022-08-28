@@ -28,6 +28,10 @@ impl ProgressBar {
         self.current += amount;
         self.current = self.current.min(self.total);
     }
+
+    pub fn reset(&mut self) {
+        self.current = 0.0;
+    }
 }
 
 #[derive(Component, Default)]
