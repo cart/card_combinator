@@ -2,8 +2,8 @@ use bevy::{prelude::*, utils::HashMap};
 use bevy_rapier3d::prelude::Collider;
 
 use crate::game::{
-    card::{Card, CardBundle, CardType, HoverPoint, SelectedCard},
-    progress_bar::{ProgressBar, ProgressBarStatus},
+    card::{Card, CardBundle, CardClass, CardType, HoverPoint, SelectedCard},
+    progress_bar::{ProgressBar, ProgressBarBundle, ProgressBarStatus},
 };
 
 pub struct TilePlugin;
@@ -72,6 +72,47 @@ impl Tile {
 
     pub fn slot_size() -> Vec2 {
         Tile::TILE_SLOT_SIZE * Vec2::new(Tile::TILE_SLOT_ASPECT_RATIO, 1.0)
+    }
+
+    pub fn try_slotting_card(
+        &mut self,
+        commands: &mut Commands,
+        tile_entity: Entity,
+        card_entity: Entity,
+        card: &Card,
+    ) -> bool {
+        match self {
+            Tile::Woods {
+                slotted_villager,
+                progress_bar,
+            } => {
+                if slotted_villager.is_none() && card.card_type.class() == CardClass::Villager {
+                    *slotted_villager = Some(card_entity);
+                    let mut new_progress_bar = None;
+                    commands.entity(tile_entity).with_children(|parent| {
+                        new_progress_bar = Some(
+                            parent
+                                .spawn_bundle(ProgressBarBundle {
+                                    progress_bar: ProgressBar {
+                                        current: 0.0,
+                                        total: 2.0,
+                                        width: 0.85,
+                                        height: 0.15,
+                                        padding: 0.05,
+                                    },
+                                    transform: Transform::from_xyz(0.0, 0.7, 0.0),
+                                    ..default()
+                                })
+                                .id(),
+                        );
+                    });
+                    *progress_bar = new_progress_bar;
+                    true
+                } else {
+                    false
+                }
+            }
+        }
     }
 }
 

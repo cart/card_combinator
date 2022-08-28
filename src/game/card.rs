@@ -487,7 +487,6 @@ pub fn select_card(
             card.animations.deselect.reset();
             *selected_card = SelectedCard::None;
             // try stacking on a tile
-            // TODO: try factoring this out?
             if !card.in_stack() {
                 if let Some(tile_entity) = hovered_tile.0 {
                     if let Ok((mut tile, transform)) = tiles.get_mut(tile_entity) {
@@ -498,40 +497,9 @@ pub fn select_card(
                                 && transform.translation.y - slot_size.y / 2.0 < hover_point.y
                                 && hover_point.y < transform.translation.y + slot_size.y / 2.0
                             {
-                                match &mut *tile {
-                                    Tile::Woods {
-                                        slotted_villager: slotted_card,
-                                        progress_bar,
-                                    } => {
-                                        if slotted_card.is_none()
-                                            && card.card_type.class() == CardClass::Villager
-                                        {
-                                            *slotted_card = Some(entity);
-                                            card.slotted_in_tile = Some(tile_entity);
-
-                                            let mut new_progress_bar = None;
-                                            commands.entity(tile_entity).with_children(|parent| {
-                                                new_progress_bar = Some(
-                                                    parent
-                                                        .spawn_bundle(ProgressBarBundle {
-                                                            progress_bar: ProgressBar {
-                                                                current: 0.0,
-                                                                total: 5.0,
-                                                                width: 0.85,
-                                                                height: 0.15,
-                                                                padding: 0.05,
-                                                            },
-                                                            transform: Transform::from_xyz(
-                                                                0.0, 0.7, 0.0,
-                                                            ),
-                                                            ..default()
-                                                        })
-                                                        .id(),
-                                                );
-                                            });
-                                            *progress_bar = new_progress_bar;
-                                        }
-                                    }
+                                if tile.try_slotting_card(&mut commands, tile_entity, entity, &card)
+                                {
+                                    card.slotted_in_tile = Some(tile_entity);
                                 }
                             }
                         }
