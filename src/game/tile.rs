@@ -1,7 +1,7 @@
 use bevy::{prelude::*, utils::HashMap};
 use bevy_rapier3d::prelude::Collider;
 
-use crate::game::card::HoverPoint;
+use crate::game::card::{Card, HoverPoint, SelectedCard};
 
 pub struct TilePlugin;
 
@@ -20,7 +20,7 @@ fn spawn_tiles(mut commands: Commands, tile_data: Res<TileData>) {
     for x in -1..2 {
         for y in -1..2 {
             commands.spawn_bundle(TileBundle {
-                tile: Tile::Woods,
+                tile: Tile::Woods { slotted_card: None },
                 tile_grid_location: TileGridLocation(IVec2::new(x, y)),
                 ..default()
             });
@@ -28,11 +28,17 @@ fn spawn_tiles(mut commands: Commands, tile_data: Res<TileData>) {
     }
 }
 
-#[derive(Component, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
 pub enum Tile {
-    #[default]
-    Woods,
+    Woods { slotted_card: Option<Entity> },
 }
+
+impl Default for Tile {
+    fn default() -> Self {
+        Self::Woods { slotted_card: None }
+    }
+}
+
 impl Tile {
     pub const SIZE: Vec2 = Vec2::from_array([3.0, 3.0]);
     pub const OFFSET: Vec2 = Vec2::from_array([-0.05, -0.05]);
@@ -49,19 +55,23 @@ impl Tile {
         let grid = (translation.truncate() + sign * size / 2.0) / size;
         grid.as_ivec2()
     }
+
+    pub fn slot_size() -> Vec2 {
+        Tile::TILE_SLOT_SIZE * Vec2::new(Tile::TILE_SLOT_ASPECT_RATIO, 1.0)
+    }
 }
 
 #[derive(Component, Default, Clone, Copy, PartialEq, Eq, Deref, DerefMut)]
 pub struct TileGridLocation(IVec2);
 
 #[derive(Component, Default)]
-pub struct TileSlot(Option<Entity>);
+pub struct TileSlotEffect(Option<Entity>);
 
 #[derive(Bundle, Default)]
 pub struct TileBundle {
     pub tile: Tile,
     pub tile_grid_location: TileGridLocation,
-    pub tile_slot: TileSlot,
+    pub tile_slot: TileSlotEffect,
     pub transform: Transform,
     pub global_transform: GlobalTransform,
     pub visibility: Visibility,
@@ -91,7 +101,7 @@ impl FromWorld for TileData {
             ),
             tile_slot_mesh: meshes.add(
                 shape::Quad {
-                    size: Tile::TILE_SLOT_SIZE * Vec2::new(Tile::TILE_SLOT_ASPECT_RATIO, 1.0),
+                    size: Tile::slot_size(),
                     ..default()
                 }
                 .into(),
@@ -129,7 +139,7 @@ fn on_spawn_tile(
             Entity,
             &Tile,
             &TileGridLocation,
-            &mut TileSlot,
+            &mut TileSlotEffect,
             &mut Transform,
         ),
         Added<Tile>,
@@ -141,7 +151,7 @@ fn on_spawn_tile(
         commands.entity(entity).with_children(|parent| {
             parent.spawn_bundle(PbrBundle {
                 material: match tile {
-                    Tile::Woods => tile_data.woods_material.clone(),
+                    Tile::Woods { .. } => tile_data.woods_material.clone(),
                 },
                 mesh: tile_data.mesh.clone(),
                 ..default()
@@ -162,14 +172,16 @@ fn on_spawn_tile(
 }
 
 #[derive(Default)]
-pub struct HoveredTile(Option<Entity>);
+pub struct HoveredTile(pub Option<Entity>);
 
-fn hover_tile(
+pub fn hover_tile(
     hover_point: Res<HoverPoint>,
     tile_grid: Res<TileGrid>,
+    mouse_input: Res<Input<MouseButton>>,
     mut hovered_tile: ResMut<HoveredTile>,
+    selected_card: Res<SelectedCard>,
     mut visibilities: Query<&mut Visibility>,
-    tile_slots: Query<&TileSlot>,
+    tile_slots: Query<&TileSlotEffect>,
 ) {
     if let Some(tile_entity) = hovered_tile.0 {
         if let Some(tile_slot) = tile_slots.get(tile_entity).unwrap().0 {
@@ -178,19 +190,22 @@ fn hover_tile(
             }
         }
     }
-    if let HoverPoint::Some(point) = *hover_point {
-        let location = Tile::translation_to_grid(point);
-        if let Some(tile_entity) = tile_grid.get(&location) {
-            hovered_tile.0 = Some(*tile_entity);
-            if let Some(tile_slot) = tile_slots.get(*tile_entity).unwrap().0 {
-                if let Ok(mut visibility) = visibilities.get_mut(tile_slot) {
-                    visibility.is_visible = true;
+
+    if let SelectedCard::Some(_) = *selected_card {
+        if let HoverPoint::Some(point) = *hover_point {
+            let location = Tile::translation_to_grid(point);
+            if let Some(tile_entity) = tile_grid.get(&location) {
+                hovered_tile.0 = Some(*tile_entity);
+                if let Some(tile_slot) = tile_slots.get(*tile_entity).unwrap().0 {
+                    if let Ok(mut visibility) = visibilities.get_mut(tile_slot) {
+                        visibility.is_visible = true;
+                    }
                 }
+            } else {
+                hovered_tile.0 = None;
             }
         } else {
             hovered_tile.0 = None;
         }
-    } else {
-        hovered_tile.0 = None;
     }
 }

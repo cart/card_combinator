@@ -7,6 +7,7 @@ use bevy_rapier3d::prelude::*;
 use crate::game::animate::{AnimateRange, Ease};
 use crate::game::camera::PlayerCamera;
 use crate::game::progress_bar::{ProgressBar, ProgressBarBundle};
+use crate::game::tile::{HoveredTile, Tile};
 
 pub struct CardPlugin;
 
@@ -21,6 +22,7 @@ impl Plugin for CardPlugin {
             .add_system(
                 select_card
                     .after(crate::game::camera::move_camera)
+                    // .after(crate::game::tile::hover_tile)
                     .after(collide_cards),
             )
             .add_system(move_cards.after(select_card))
@@ -35,7 +37,7 @@ pub struct Card {
     pub z: usize,
     pub stack_parent: Option<Entity>,
     pub stack_child: Option<Entity>,
-    pub tile_slot: Option<Entity>,
+    pub slotted_in_tile: Option<Entity>,
 }
 
 impl Card {
@@ -44,6 +46,14 @@ impl Card {
     const ART_HEIGHT: f32 = 166.0;
     const ART_ASPECT: f32 = Self::ART_WIDTH / Self::ART_HEIGHT;
     const SPAWN_OFFSET: f32 = 1.0;
+
+    pub fn is_stackable(&self) -> bool {
+        self.slotted_in_tile.is_none()
+    }
+
+    pub fn in_stack(&self) -> bool {
+        self.stack_parent.is_some() || self.stack_child.is_some()
+    }
 }
 
 #[derive(Default, Copy, Clone, Hash, PartialEq, Eq, Debug)]
@@ -235,6 +245,7 @@ fn move_cards(
     hover_point: Res<HoverPoint>,
     stack_roots: Res<StackRoots>,
     mut cards: Query<(Entity, &mut Card, &mut Transform)>,
+    mut transforms: Query<&Transform, Without<Card>>,
 ) {
     for (entity, mut card, mut transform) in &mut cards {
         let mut z_offset = 0.0;
@@ -246,6 +257,12 @@ fn move_cards(
             }
         } else {
             z_offset += card.animations.deselect.tick(time.delta());
+        }
+
+        if let Some(tile) = card.slotted_in_tile {
+            let tile_transform = transforms.get(tile).unwrap();
+            transform.translation.x = tile_transform.translation.x;
+            transform.translation.y = tile_transform.translation.y;
         }
         transform.translation.z = z_offset;
     }
@@ -377,12 +394,14 @@ fn find_stack_root(cards: &Query<&Card>, mut current_entity: Entity) -> Entity {
 pub fn select_card(
     context: Res<RapierContext>,
     windows: Res<Windows>,
-    mut selected_card: ResMut<SelectedCard>,
-    mut hover_point: ResMut<HoverPoint>,
-    mut stack_roots: ResMut<StackRoots>,
+    hovered_tile: Res<HoveredTile>,
     mouse: Res<Input<MouseButton>>,
-    mut cards: Query<&mut Card>,
+    mut selected_card: ResMut<SelectedCard>,
+    mut stack_roots: ResMut<StackRoots>,
+    mut hover_point: ResMut<HoverPoint>,
     cameras: Query<(&Camera, &Transform), With<PlayerCamera>>,
+    mut cards: Query<&mut Card>,
+    mut tiles: Query<(&mut Tile, &Transform)>,
 ) {
     let window = windows.primary();
     if let Some(mut cursor) = window.cursor_position() {
@@ -421,6 +440,13 @@ pub fn select_card(
             if let Some((entity, toi)) = result {
                 let (parent, child) = {
                     let mut card = cards.get_mut(entity).unwrap();
+                    if let Some(tile_entity) = card.slotted_in_tile {
+                        card.slotted_in_tile = None;
+                        let (mut tile, _) = tiles.get_mut(tile_entity).unwrap();
+                        match &mut *tile {
+                            Tile::Woods { slotted_card } => *slotted_card = None,
+                        }
+                    }
                     card.animations.select.reset();
                     *selected_card = SelectedCard::Some(entity);
                     let parent = card.stack_parent;
@@ -449,6 +475,29 @@ pub fn select_card(
             let mut card = cards.get_mut(entity).unwrap();
             card.animations.deselect.reset();
             *selected_card = SelectedCard::None;
+            if !card.in_stack() {
+                if let Some(tile_entity) = hovered_tile.0 {
+                    if let Ok((mut tile, transform)) = tiles.get_mut(tile_entity) {
+                        if let HoverPoint::Some(hover_point) = *hover_point {
+                            let slot_size = Tile::slot_size();
+                            if transform.translation.x - slot_size.x / 2.0 < hover_point.x
+                                && hover_point.x < transform.translation.x + slot_size.x / 2.0
+                                && transform.translation.y - slot_size.y / 2.0 < hover_point.y
+                                && hover_point.y < transform.translation.y + slot_size.y / 2.0
+                            {
+                                match &mut *tile {
+                                    Tile::Woods { slotted_card } => {
+                                        if slotted_card.is_none() {
+                                            *slotted_card = Some(entity);
+                                            card.slotted_in_tile = Some(tile_entity);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
