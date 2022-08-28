@@ -1,4 +1,8 @@
-use bevy::prelude::*;
+use std::time::Duration;
+
+use bevy::{input::mouse::MouseWheel, prelude::*};
+
+use crate::game::animate::{AnimateRange, Ease};
 
 #[derive(Component)]
 pub struct PlayerCamera {
@@ -33,10 +37,31 @@ fn setup_camera(mut commands: Commands) {
 }
 
 pub fn move_camera(
+    mut view_height: Local<i8>,
+    mut scroll_accumulation: Local<f32>,
     time: Res<Time>,
     input: Res<Input<KeyCode>>,
+    mut mouse_wheel_events: EventReader<MouseWheel>,
     mut cameras: Query<(&PlayerCamera, &mut Transform)>,
 ) {
+    for event in mouse_wheel_events.iter() {
+        match event.unit {
+            bevy::input::mouse::MouseScrollUnit::Line => {
+                *scroll_accumulation += 20.0 * event.y.signum()
+            }
+            bevy::input::mouse::MouseScrollUnit::Pixel => *scroll_accumulation += event.y,
+        }
+        if *scroll_accumulation >= 20.0 {
+            *scroll_accumulation = 0.0;
+            *view_height += 1;
+        } else if *scroll_accumulation <= -20.0 {
+            *scroll_accumulation = 0.0;
+            *view_height -= 1;
+        }
+
+        *view_height = view_height.min(1).max(-1);
+    }
+
     for (camera, mut transform) in &mut cameras {
         let mut direction = Vec3::ZERO;
         if input.any_pressed([KeyCode::A, KeyCode::Left]) {
@@ -56,5 +81,14 @@ pub fn move_camera(
             direction = direction.normalize();
         }
         transform.translation += direction * camera.base_speed * time.delta_seconds();
+
+        let target_z = 8.0 + *view_height as f32 * 2.0;
+        let mut animation = AnimateRange::new(
+            Duration::from_secs_f32(0.2),
+            Ease::Linear,
+            transform.translation.z..target_z,
+            false,
+        );
+        transform.translation.z = animation.tick(time.delta());
     }
 }
