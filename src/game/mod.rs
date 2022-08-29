@@ -43,11 +43,11 @@ fn setup(
         ..default()
     });
 
-    commands.spawn_bundle(CardBundle {
-        transform: Transform::from_xyz(0.0, 3.0, 0.0),
-        card: Card::from(CardType::Goblin),
-        ..default()
-    });
+    // commands.spawn_bundle(CardBundle {
+    //     transform: Transform::from_xyz(0.0, 3.0, 0.0),
+    //     card: Card::from(CardType::Goblin),
+    //     ..default()
+    // });
 
     // commands.spawn_bundle(CardBundle {
     //     transform: Transform::from_xyz(1.0, 0.0, 0.0),

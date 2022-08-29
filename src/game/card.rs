@@ -27,7 +27,8 @@ impl Plugin for CardPlugin {
             .add_system(move_cards.after(select_card))
             .add_system(evaluate_stacks.after(move_cards))
             .add_system(handle_enemies.after(evaluate_stacks))
-            .add_system(combat.after(handle_enemies));
+            .add_system(combat.after(handle_enemies))
+            .add_system(set_hearts.after(combat));
     }
 }
 
@@ -305,7 +306,7 @@ impl FromWorld for CardData {
                 ..default()
             }),
             removed_heart_material: materials.add(StandardMaterial {
-                base_color: Color::rgba(1.0, 1.0, 1.0, 0.1),
+                base_color: Color::rgba(0.1, 0.1, 0.1, 0.5),
                 base_color_texture: Some(asset_server.load("heart.png")),
                 unlit: true,
                 alpha_mode: AlphaMode::Blend,
@@ -378,6 +379,28 @@ fn on_spawn_card(
                     }
                 });
         });
+    }
+}
+
+fn set_hearts(
+    card_data: Res<CardData>,
+    cards: Query<(&Card, &Children)>,
+    children: Query<&Children>,
+    mut materials: Query<&mut Handle<StandardMaterial>>,
+) {
+    for (card, card_children) in &cards {
+        if card.info.stats.max_health > 0 {
+            let heart_children = children.get(card_children[2]).unwrap();
+            for i in 0..card.info.stats.max_health {
+                let child = heart_children[i];
+                let mut material = materials.get_mut(child).unwrap();
+                if i < card.info.stats.health as usize {
+                    *material = card_data.heart_material.clone();
+                } else {
+                    *material = card_data.removed_heart_material.clone();
+                }
+            }
+        }
     }
 }
 
@@ -602,6 +625,7 @@ pub fn select_card(
                                         commands.entity(progress_bar).despawn_recursive();
                                     }
                                 }
+                                _ => {}
                             }
                         }
                         card.animations.select.reset();
@@ -887,19 +911,21 @@ fn combat(
         };
 
         if let Some((damaged_entity, damage)) = result {
-            println!("{entity:?} attacks {damaged_entity:?} for {damage}");
-            let [mut target_card, mut card] = cards.many_mut([damaged_entity, entity]);
-            target_card.info.stats.health =
-                (target_card.info.stats.health - damage as isize).max(0);
-            if target_card.combat_state.is_none() {
-                target_card.combat_state = Some(CombatState {
-                    cooldown: Timer::from_seconds(0.9, true),
-                    target: entity,
-                });
-            }
-            if target_card.info.stats.health == 0 {
-                card.combat_state = None;
-                commands.entity(damaged_entity).despawn_recursive();
+            if let Ok([mut target_card, mut card]) = cards.get_many_mut([damaged_entity, entity]) {
+                target_card.info.stats.health =
+                    (target_card.info.stats.health - damage as isize).max(0);
+                if target_card.combat_state.is_none() {
+                    target_card.combat_state = Some(CombatState {
+                        cooldown: Timer::from_seconds(0.9, true),
+                        target: entity,
+                    });
+                }
+                if target_card.info.stats.health == 0 {
+                    card.combat_state = None;
+                    commands.entity(damaged_entity).despawn_recursive();
+                }
+            } else {
+                cards.get_mut(entity).unwrap().combat_state = None;
             }
         }
     }

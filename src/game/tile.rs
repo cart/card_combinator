@@ -1,9 +1,11 @@
+use std::time::Duration;
+
 use bevy::{prelude::*, utils::HashMap};
 use bevy_rapier3d::prelude::Collider;
 
 use crate::game::{
     card::{Card, CardBundle, CardClass, CardType, HoverPoint, SelectedCard},
-    progress_bar::{ProgressBar, ProgressBarBundle, ProgressBarStatus},
+    progress_bar::{self, ProgressBar, ProgressBarBundle, ProgressBarStatus},
 };
 
 pub struct TilePlugin;
@@ -33,12 +35,20 @@ fn spawn_tiles(mut commands: Commands, tile_data: Res<TileData>) {
             });
         }
     }
+    commands.spawn_bundle(TileBundle {
+        tile: Tile::Enemies { progress_bar: None },
+        tile_grid_location: TileGridLocation(IVec2::new(0, 2)),
+        ..default()
+    });
 }
 
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 pub enum Tile {
     Woods {
         slotted_villager: Option<Entity>,
+        progress_bar: Option<Entity>,
+    },
+    Enemies {
         progress_bar: Option<Entity>,
     },
 }
@@ -74,6 +84,16 @@ impl Tile {
         Tile::TILE_SLOT_SIZE * Vec2::new(Tile::TILE_SLOT_ASPECT_RATIO, 1.0)
     }
 
+    pub fn has_slot(&self) -> bool {
+        match self {
+            Tile::Woods {
+                slotted_villager,
+                progress_bar,
+            } => true,
+            Tile::Enemies { progress_bar } => false,
+        }
+    }
+
     pub fn try_slotting_card(
         &mut self,
         commands: &mut Commands,
@@ -95,12 +115,12 @@ impl Tile {
                                 .spawn_bundle(ProgressBarBundle {
                                     progress_bar: ProgressBar {
                                         current: 0.0,
-                                        total: 2.0,
+                                        total: 15.0,
                                         width: 0.85,
                                         height: 0.15,
                                         padding: 0.05,
                                     },
-                                    transform: Transform::from_xyz(0.0, 0.7, 0.0),
+                                    transform: Transform::from_xyz(0.0, 1.0, 0.0),
                                     ..default()
                                 })
                                 .id(),
@@ -112,6 +132,7 @@ impl Tile {
                     false
                 }
             }
+            _ => false,
         }
     }
 }
@@ -135,6 +156,7 @@ pub struct TileBundle {
 pub struct TileData {
     mesh: Handle<Mesh>,
     woods_material: Handle<StandardMaterial>,
+    enemies_material: Handle<StandardMaterial>,
     tile_slot_mesh: Handle<Mesh>,
     tile_slot_material: Handle<StandardMaterial>,
 }
@@ -168,6 +190,14 @@ impl FromWorld for TileData {
                 alpha_mode: AlphaMode::Blend,
                 ..default()
             }),
+            enemies_material: materials.add(StandardMaterial {
+                base_color_texture: Some(asset_server.load("tile_woods.png")),
+                base_color: Color::rgb_u8(60, 60, 60),
+                unlit: true,
+                depth_bias: -10.0,
+                alpha_mode: AlphaMode::Blend,
+                ..default()
+            }),
             tile_slot_material: materials.add(StandardMaterial {
                 base_color_texture: Some(asset_server.load("tile_slot.png")),
                 base_color: Color::rgba_u8(255, 255, 255, 100),
@@ -188,36 +218,84 @@ fn on_spawn_tile(
     asset_server: Res<AssetServer>,
     tile_data: Res<TileData>,
     mut tile_grid: ResMut<TileGrid>,
-    mut tiles: Query<(Entity, &Tile, &TileGridLocation, &mut Transform), Added<Tile>>,
+    mut tiles: Query<(Entity, &mut Tile, &TileGridLocation, &mut Transform), Added<Tile>>,
 ) {
-    for (entity, tile, location, mut transform) in &mut tiles {
+    for (entity, mut tile, location, mut transform) in &mut tiles {
         tile_grid.insert(location.0, entity);
         transform.translation = Tile::grid_to_translation(location.0);
         let mut tile_slot = None;
-        commands.entity(entity).with_children(|parent| {
-            parent.spawn_bundle(PbrBundle {
-                material: match tile {
-                    Tile::Woods { .. } => tile_data.woods_material.clone(),
-                },
-                mesh: tile_data.mesh.clone(),
-                ..default()
-            });
-            tile_slot = Some(
-                parent
-                    .spawn_bundle(PbrBundle {
-                        material: tile_data.tile_slot_material.clone(),
-                        mesh: tile_data.tile_slot_mesh.clone(),
-                        transform: Transform::from_xyz(0.0, 0.0, 0.001),
-                        visibility: Visibility { is_visible: false },
+        match &mut *tile {
+            Tile::Woods {
+                slotted_villager,
+                progress_bar,
+            } => {
+                commands.entity(entity).with_children(|parent| {
+                    parent.spawn_bundle(PbrBundle {
+                        material: tile_data.woods_material.clone(),
+                        mesh: tile_data.mesh.clone(),
                         ..default()
-                    })
-                    .id(),
-            );
-        });
-        commands
-            .entity(entity)
-            .insert(TileSlotEffect(tile_slot.unwrap()));
+                    });
+                });
+            }
+            Tile::Enemies { progress_bar } => {
+                commands.entity(entity).with_children(|parent| {
+                    parent.spawn_bundle(PbrBundle {
+                        material: tile_data.enemies_material.clone(),
+                        mesh: tile_data.mesh.clone(),
+                        ..default()
+                    });
+
+                    *progress_bar = Some(
+                        parent
+                            .spawn_bundle(ProgressBarBundle {
+                                progress_bar: ProgressBar {
+                                    current: 0.0,
+                                    total: 20.0,
+                                    width: 1.0,
+                                    height: 0.15,
+                                    padding: 0.05,
+                                },
+                                transform: Transform::from_xyz(0.0, 1.0, 0.0),
+                                ..default()
+                            })
+                            .id(),
+                    );
+                });
+            }
+        }
+
+        if tile.has_slot() {
+            commands.entity(entity).with_children(|parent| {
+                tile_slot = Some(
+                    parent
+                        .spawn_bundle(PbrBundle {
+                            material: tile_data.tile_slot_material.clone(),
+                            mesh: tile_data.tile_slot_mesh.clone(),
+                            transform: Transform::from_xyz(0.0, 0.0, 0.001),
+                            visibility: Visibility { is_visible: false },
+                            ..default()
+                        })
+                        .id(),
+                );
+            });
+        }
+        if let Some(tile_slot) = tile_slot {
+            commands.entity(entity).insert(TileSlotEffect(tile_slot));
+        }
     }
+}
+
+pub fn enemy_tile_spawner(
+    mut commands: Commands,
+    mut timer: Local<Option<Timer>>,
+    mut grid_size: Local<UVec2>,
+    time: Res<Time>,
+) {
+    if *grid_size == UVec2::new(0, 0) {
+        *grid_size = UVec2::new(3, 3);
+    }
+    let timer = timer.get_or_insert(Timer::new(Duration::from_secs_f32(60.0), true));
+    if timer.tick(time.delta()).just_finished() {}
 }
 
 #[derive(Default)]
@@ -234,9 +312,10 @@ pub fn hover_tile(
     tiles: Query<(&Tile, &TileSlotEffect)>,
 ) {
     if let Some(tile_entity) = hovered_tile.0 {
-        let tile_slot = tile_slots.get(tile_entity).unwrap();
-        let mut visibility = visibilities.get_mut(tile_slot.0).unwrap();
-        visibility.is_visible = false;
+        if let Ok(tile_slot) = tile_slots.get(tile_entity) {
+            let mut visibility = visibilities.get_mut(tile_slot.0).unwrap();
+            visibility.is_visible = false;
+        }
     }
     for (tile, tile_slot) in tiles.iter() {
         match tile {
@@ -246,6 +325,7 @@ pub fn hover_tile(
                 let mut visibility = visibilities.get_mut(tile_slot.0).unwrap();
                 visibility.is_visible = slotted_villager.is_some();
             }
+            _ => {}
         }
     }
 
@@ -286,6 +366,25 @@ fn evaluate_tiles(
                                 card: Card::from(CardType::Log),
                                 transform: Transform::from_xyz(
                                     transform.translation.x + Tile::SPAWN_OFFSET,
+                                    transform.translation.y,
+                                    0.0,
+                                ),
+                                ..default()
+                            });
+                            bar.reset();
+                        }
+                    }
+                }
+            }
+            Tile::Enemies { progress_bar } => {
+                if let Some(bar_entity) = *progress_bar {
+                    if let Ok(mut bar) = progress_bars.get_mut(bar_entity) {
+                        bar.add(time.delta_seconds());
+                        if bar.finished() {
+                            commands.spawn_bundle(CardBundle {
+                                card: Card::from(CardType::Goblin),
+                                transform: Transform::from_xyz(
+                                    transform.translation.x,
                                     transform.translation.y,
                                     0.0,
                                 ),
