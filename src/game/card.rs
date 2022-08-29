@@ -25,7 +25,9 @@ impl Plugin for CardPlugin {
                     .after(collide_cards),
             )
             .add_system(move_cards.after(select_card))
-            .add_system(evaluate_stacks.after(move_cards));
+            .add_system(evaluate_stacks.after(move_cards))
+            .add_system(handle_enemies.after(evaluate_stacks))
+            .add_system(combat.after(handle_enemies));
     }
 }
 
@@ -34,9 +36,15 @@ pub struct Card {
     pub animations: Animations,
     pub info: CardInfo,
     pub z: usize,
+    pub combat_state: Option<CombatState>,
     pub stack_parent: Option<Entity>,
     pub stack_child: Option<Entity>,
     pub slotted_in_tile: Option<Entity>,
+}
+
+pub struct CombatState {
+    cooldown: Timer,
+    target: Entity,
 }
 
 impl From<CardType> for Card {
@@ -137,7 +145,7 @@ impl CardType {
 }
 
 pub struct CardStats {
-    pub health: usize,
+    pub health: isize,
     pub max_health: usize,
     pub damage: usize,
 }
@@ -350,25 +358,25 @@ fn on_spawn_card(
                 transform: Transform::from_xyz(0.0, -0.08, 0.001),
                 ..default()
             });
-            // parent
-            //     .spawn_bundle(SpatialBundle::default())
-            //     .with_children(|parent| {
-            //         let max = card.info.stats.max_health;
-            //         let offset = HEART_PANEL_WIDTH / max as f32;
-            //         let width = (max - 1) as f32 * offset;
-            //         for i in 0..max {
-            //             parent.spawn_bundle(PbrBundle {
-            //                 material: card_data.heart_material.clone(),
-            //                 mesh: card_data.heart_mesh.clone(),
-            //                 transform: Transform::from_xyz(
-            //                     i as f32 * offset - width / 2.0,
-            //                     0.37,
-            //                     0.01,
-            //                 ),
-            //                 ..default()
-            //             });
-            //         }
-            //     });
+            parent
+                .spawn_bundle(SpatialBundle::default())
+                .with_children(|parent| {
+                    let max = card.info.stats.max_health;
+                    let offset = HEART_PANEL_WIDTH / max as f32;
+                    let width = (max - 1) as f32 * offset;
+                    for i in 0..max {
+                        parent.spawn_bundle(PbrBundle {
+                            material: card_data.heart_material.clone(),
+                            mesh: card_data.heart_mesh.clone(),
+                            transform: Transform::from_xyz(
+                                i as f32 * offset - width / 2.0,
+                                0.37,
+                                0.01,
+                            ),
+                            ..default()
+                        });
+                    }
+                });
         });
     }
 }
@@ -772,6 +780,8 @@ fn get_cards_types(root: Entity, cards: &Query<&Card>) -> HashMap<CardType, usiz
 pub struct Animations {
     select: AnimateRange,
     deselect: AnimateRange,
+    attack_in: AnimateRange,
+    attack_out: AnimateRange,
 }
 
 impl Default for Animations {
@@ -784,6 +794,113 @@ impl Default for Animations {
                 0.5..0.0,
                 false,
             ),
+            attack_in: AnimateRange::new(
+                Duration::from_secs_f32(0.2),
+                Ease::Linear,
+                1.0..1.5,
+                false,
+            ),
+            attack_out: AnimateRange::new(
+                Duration::from_secs_f32(0.2),
+                Ease::Linear,
+                1.5..1.0,
+                false,
+            ),
+        }
+    }
+}
+
+pub fn handle_enemies(time: Res<Time>, mut cards: Query<(Entity, &mut Card, &mut Transform)>) {
+    let mut enemy_targets = Vec::new();
+    for (entity, card, transform) in &cards {
+        if card.combat_state.is_some() {
+            continue;
+        }
+        if let CardClass::Enemy = card.class() {
+            let mut current_target: Option<(Entity, Vec3)> = None;
+            for (target_entity, target_card, target_transform) in &cards {
+                if target_card.class() == CardClass::Villager {
+                    if let Some((_, current_translation)) = current_target {
+                        if current_translation.distance_squared(transform.translation)
+                            > target_transform
+                                .translation
+                                .distance_squared(transform.translation)
+                        {
+                            current_target = Some((target_entity, target_transform.translation));
+                        }
+                    } else {
+                        current_target = Some((target_entity, target_transform.translation));
+                    }
+                }
+            }
+
+            if let Some((target, translation)) = current_target {
+                enemy_targets.push((entity, target, translation))
+            }
+        }
+    }
+
+    for (enemy, target, target_translation) in enemy_targets {
+        let [(_, mut card, mut transform), (_, mut target_card, _)] =
+            cards.get_many_mut([enemy, target]).unwrap();
+        let distance = target_translation - transform.translation;
+        // move until close
+        if distance.length() > 1.0 {
+            let direction = distance.normalize();
+            transform.translation += direction * time.delta_seconds();
+            card.combat_state = None;
+        } else {
+            card.combat_state = Some(CombatState {
+                cooldown: Timer::from_seconds(1.0, true),
+                target,
+            });
+
+            // if target_card.combat_state.is_none() {
+            //     target_card.combat_state = Some(CombatState {
+            //         // villagers attack faster than enemies
+            //         cooldown: Timer::from_seconds(0.9, true),
+            //         target: enemy,
+            //     });
+            // }
+        }
+    }
+}
+
+fn combat(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut cards: Query<&mut Card>,
+    card_entities: Query<Entity, With<Card>>,
+) {
+    for entity in &card_entities {
+        let result = {
+            let mut card = cards.get_mut(entity).unwrap();
+            if let Some(combat_state) = &mut card.combat_state {
+                if combat_state.cooldown.tick(time.delta()).just_finished() {
+                    Some((combat_state.target, card.info.stats.damage))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+
+        if let Some((damaged_entity, damage)) = result {
+            println!("{entity:?} attacks {damaged_entity:?} for {damage}");
+            let [mut target_card, mut card] = cards.many_mut([damaged_entity, entity]);
+            target_card.info.stats.health =
+                (target_card.info.stats.health - damage as isize).max(0);
+            if target_card.combat_state.is_none() {
+                target_card.combat_state = Some(CombatState {
+                    cooldown: Timer::from_seconds(0.9, true),
+                    target: entity,
+                });
+            }
+            if target_card.info.stats.health == 0 {
+                card.combat_state = None;
+                commands.entity(damaged_entity).despawn_recursive();
+            }
         }
     }
 }

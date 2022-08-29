@@ -2,7 +2,6 @@
 mod game;
 
 use bevy::{asset::AssetServerSettings, prelude::*};
-use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy_rapier3d::prelude::*;
 
 use crate::game::GamePlugin;
@@ -20,7 +19,7 @@ fn main() {
         .insert_resource(ClearColor(Color::rgb(0.2, 0.2, 0.2)))
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
-        // .add_plugin(WorldInspectorPlugin::new())
+        // .add_plugin(bevy_inspector_egui::WorldInspectorPlugin::new())
         // .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(GamePlugin)
         .run();
