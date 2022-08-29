@@ -32,8 +32,6 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    asset_server.watch_for_changes().unwrap();
-
     commands.spawn_bundle(CardBundle {
         transform: Transform::from_xyz(-0.5, 0.0, 0.0),
         card: Card::from(CardType::Villager),
