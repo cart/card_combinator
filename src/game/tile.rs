@@ -86,7 +86,7 @@ impl Tile {
                 slotted_villager,
                 progress_bar,
             } => {
-                if slotted_villager.is_none() && card.card_type.class() == CardClass::Villager {
+                if slotted_villager.is_none() && card.class() == CardClass::Villager {
                     *slotted_villager = Some(card_entity);
                     let mut new_progress_bar = None;
                     commands.entity(tile_entity).with_children(|parent| {
@@ -283,10 +283,7 @@ fn evaluate_tiles(
                         bar.add(time.delta_seconds());
                         if bar.finished() {
                             commands.spawn_bundle(CardBundle {
-                                card: Card {
-                                    card_type: CardType::Log,
-                                    ..default()
-                                },
+                                card: Card::from(CardType::Log),
                                 transform: Transform::from_xyz(
                                     transform.translation.x + Tile::SPAWN_OFFSET,
                                     transform.translation.y,

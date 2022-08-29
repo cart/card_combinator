@@ -22,7 +22,6 @@ impl Plugin for CardPlugin {
             .add_system(
                 select_card
                     .after(crate::game::camera::move_camera)
-                    // .after(crate::game::tile::hover_tile)
                     .after(collide_cards),
             )
             .add_system(move_cards.after(select_card))
@@ -33,11 +32,20 @@ impl Plugin for CardPlugin {
 #[derive(Component, Default)]
 pub struct Card {
     pub animations: Animations,
-    pub card_type: CardType,
+    pub info: CardInfo,
     pub z: usize,
     pub stack_parent: Option<Entity>,
     pub stack_child: Option<Entity>,
     pub slotted_in_tile: Option<Entity>,
+}
+
+impl From<CardType> for Card {
+    fn from(card_type: CardType) -> Self {
+        Self {
+            info: card_type.into(),
+            ..default()
+        }
+    }
 }
 
 impl Card {
@@ -47,8 +55,24 @@ impl Card {
     pub const ART_ASPECT: f32 = Self::ART_WIDTH / Self::ART_HEIGHT;
     pub const SPAWN_OFFSET: f32 = 1.0;
 
+    pub fn card_type(&self) -> CardType {
+        self.info.card_type
+    }
+
+    pub fn class(&self) -> CardClass {
+        self.info.card_type.class()
+    }
+
     pub fn is_stackable(&self) -> bool {
-        self.slotted_in_tile.is_none()
+        self.slotted_in_tile.is_none() && !(self.class() == CardClass::Enemy)
+    }
+
+    pub fn is_player_controlled(&self) -> bool {
+        match self.class() {
+            CardClass::Villager => true,
+            CardClass::Resource => true,
+            CardClass::Enemy => false,
+        }
     }
 
     pub fn in_stack(&self) -> bool {
@@ -61,21 +85,68 @@ pub enum CardType {
     #[default]
     Villager,
     Log,
+    Goblin,
+}
+
+pub struct CardInfo {
+    pub card_type: CardType,
+    pub stats: CardStats,
+}
+
+impl Default for CardInfo {
+    fn default() -> Self {
+        CardType::default().into()
+    }
+}
+
+impl From<CardType> for CardInfo {
+    fn from(card_type: CardType) -> Self {
+        let stats = card_type.get_initial_stats();
+        Self { card_type, stats }
+    }
 }
 
 impl CardType {
-    pub fn class(self) -> CardClass {
+    pub fn class(&self) -> CardClass {
         match self {
-            CardType::Villager => CardClass::Villager,
+            CardType::Villager { .. } => CardClass::Villager,
             CardType::Log => CardClass::Resource,
+            CardType::Goblin { .. } => CardClass::Enemy,
         }
     }
+
+    pub fn get_initial_stats(&self) -> CardStats {
+        match self {
+            CardType::Villager => CardStats {
+                health: 3,
+                max_health: 3,
+                damage: 1,
+            },
+            CardType::Goblin => CardStats {
+                health: 1,
+                max_health: 1,
+                damage: 1,
+            },
+            _ => CardStats {
+                health: 0,
+                max_health: 0,
+                damage: 0,
+            },
+        }
+    }
+}
+
+pub struct CardStats {
+    pub health: usize,
+    pub max_health: usize,
+    pub damage: usize,
 }
 
 #[derive(PartialEq, Eq)]
 pub enum CardClass {
     Villager,
     Resource,
+    Enemy,
 }
 
 #[derive(Default, PartialEq, Eq, Copy, Clone)]
@@ -148,10 +219,15 @@ impl Default for CardBundle {
 pub struct CardData {
     mesh: Handle<Mesh>,
     portrait_mesh: Handle<Mesh>,
+    heart_mesh: Handle<Mesh>,
     villager_base: Handle<StandardMaterial>,
     resource_base: Handle<StandardMaterial>,
+    enemy_base: Handle<StandardMaterial>,
     villager_portrait_base: Handle<StandardMaterial>,
     log_portrait_base: Handle<StandardMaterial>,
+    goblin_portrait_base: Handle<StandardMaterial>,
+    heart_material: Handle<StandardMaterial>,
+    removed_heart_material: Handle<StandardMaterial>,
 }
 
 impl FromWorld for CardData {
@@ -174,6 +250,10 @@ impl FromWorld for CardData {
             base_color: Color::rgb(0.7, 0.7, 0.4),
             ..card_base_material.clone()
         };
+        let enemy_base = StandardMaterial {
+            base_color: Color::rgb(0.7, 0.4, 0.4),
+            ..card_base_material.clone()
+        };
         Self {
             mesh: meshes.add(
                 Quad {
@@ -189,6 +269,13 @@ impl FromWorld for CardData {
                 }
                 .into(),
             ),
+            heart_mesh: meshes.add(
+                Quad {
+                    size: Vec2::new(HEART_WIDTH, HEART_HEIGHT),
+                    ..default()
+                }
+                .into(),
+            ),
             villager_portrait_base: materials.add(StandardMaterial {
                 base_color_texture: Some(asset_server.load("villager.png")),
                 ..villager_base.clone()
@@ -197,8 +284,29 @@ impl FromWorld for CardData {
                 base_color_texture: Some(asset_server.load("log.png")),
                 ..resource_base.clone()
             }),
+            goblin_portrait_base: materials.add(StandardMaterial {
+                base_color_texture: Some(asset_server.load("goblin.png")),
+                ..enemy_base.clone()
+            }),
+            heart_material: materials.add(StandardMaterial {
+                base_color: Color::rgba_u8(200, 90, 90, 255),
+                base_color_texture: Some(asset_server.load("heart.png")),
+                unlit: true,
+                alpha_mode: AlphaMode::Blend,
+                depth_bias: 0.1,
+                ..default()
+            }),
+            removed_heart_material: materials.add(StandardMaterial {
+                base_color: Color::rgba(1.0, 1.0, 1.0, 0.1),
+                base_color_texture: Some(asset_server.load("heart.png")),
+                unlit: true,
+                alpha_mode: AlphaMode::Blend,
+                depth_bias: 0.1,
+                ..default()
+            }),
             villager_base: materials.add(villager_base),
             resource_base: materials.add(resource_base),
+            enemy_base: materials.add(enemy_base),
         }
     }
 }
@@ -208,15 +316,21 @@ impl CardData {
         match card_class {
             CardClass::Villager => self.villager_base.clone(),
             CardClass::Resource => self.resource_base.clone(),
+            CardClass::Enemy => self.enemy_base.clone(),
         }
     }
     pub fn portrait_material(&self, card_type: CardType) -> Handle<StandardMaterial> {
         match card_type {
-            CardType::Villager => self.villager_portrait_base.clone(),
+            CardType::Villager { .. } => self.villager_portrait_base.clone(),
             CardType::Log => self.log_portrait_base.clone(),
+            CardType::Goblin { .. } => self.goblin_portrait_base.clone(),
         }
     }
 }
+
+const HEART_WIDTH: f32 = 0.11;
+const HEART_HEIGHT: f32 = 0.1;
+const HEART_PANEL_WIDTH: f32 = 0.6;
 
 fn on_spawn_card(
     mut commands: Commands,
@@ -226,16 +340,35 @@ fn on_spawn_card(
     for (entity, card) in &cards {
         commands.entity(entity).with_children(|parent| {
             parent.spawn_bundle(PbrBundle {
-                material: card_data.class_material(card.card_type.class()),
+                material: card_data.class_material(card.class()),
                 mesh: card_data.mesh.clone(),
                 ..default()
             });
             parent.spawn_bundle(PbrBundle {
-                material: card_data.portrait_material(card.card_type),
+                material: card_data.portrait_material(card.card_type()),
                 mesh: card_data.portrait_mesh.clone(),
                 transform: Transform::from_xyz(0.0, -0.08, 0.001),
                 ..default()
             });
+            parent
+                .spawn_bundle(SpatialBundle::default())
+                .with_children(|parent| {
+                    let max = card.info.stats.max_health;
+                    let offset = HEART_PANEL_WIDTH / max as f32;
+                    let width = (max - 1) as f32 * offset;
+                    for i in 0..max {
+                        parent.spawn_bundle(PbrBundle {
+                            material: card_data.heart_material.clone(),
+                            mesh: card_data.heart_mesh.clone(),
+                            transform: Transform::from_xyz(
+                                i as f32 * offset - width / 2.0,
+                                0.37,
+                                0.01,
+                            ),
+                            ..default()
+                        });
+                    }
+                });
         });
     }
 }
@@ -334,7 +467,11 @@ fn collide_cards(
     for (ex, ey) in stack_x_on_y {
         let top = find_stack_top(&cards.to_readonly(), ey);
         if let Ok([mut cx, mut ctop]) = cards.get_many_mut([ex, top]) {
-            if cx.stack_parent.is_none() && ctop.stack_child.is_none() && ctop.is_stackable() {
+            if cx.stack_parent.is_none()
+                && ctop.stack_child.is_none()
+                && ctop.is_stackable()
+                && cx.is_stackable()
+            {
                 // update pointers
                 ctop.stack_child = Some(ex);
                 cx.stack_parent = Some(top);
@@ -440,41 +577,43 @@ pub fn select_card(
             let result = context.cast_ray(near, direction, 50.0, true, QueryFilter::new());
 
             if let Some((entity, toi)) = result {
-                let (parent, child) = {
-                    let mut card = cards.get_mut(entity).unwrap();
-                    // unslot from tile
-                    if let Some(tile_entity) = card.slotted_in_tile {
-                        card.slotted_in_tile = None;
-                        let (mut tile, _) = tiles.get_mut(tile_entity).unwrap();
-                        match &mut *tile {
-                            Tile::Woods {
-                                slotted_villager,
-                                progress_bar,
-                            } => {
-                                *slotted_villager = None;
-                                if let Some(progress_bar) = *progress_bar {
-                                    commands.entity(progress_bar).despawn_recursive();
+                if cards.get(entity).unwrap().is_player_controlled() {
+                    let (parent, child) = {
+                        let mut card = cards.get_mut(entity).unwrap();
+                        // unslot from tile
+                        if let Some(tile_entity) = card.slotted_in_tile {
+                            card.slotted_in_tile = None;
+                            let (mut tile, _) = tiles.get_mut(tile_entity).unwrap();
+                            match &mut *tile {
+                                Tile::Woods {
+                                    slotted_villager,
+                                    progress_bar,
+                                } => {
+                                    *slotted_villager = None;
+                                    if let Some(progress_bar) = *progress_bar {
+                                        commands.entity(progress_bar).despawn_recursive();
+                                    }
                                 }
                             }
                         }
-                    }
-                    card.animations.select.reset();
-                    *selected_card = SelectedCard::Some(entity);
-                    let parent = card.stack_parent;
-                    card.stack_parent = None;
-                    (parent, card.stack_child)
-                };
-                // finish unstack
-                if let Some(parent) = parent {
-                    let mut card = cards.get_mut(parent).unwrap();
-                    card.stack_child = None;
-                    // queue parent for recomputation
-                    stack_roots.queued_stack_recomputations.insert(parent);
+                        card.animations.select.reset();
+                        *selected_card = SelectedCard::Some(entity);
+                        let parent = card.stack_parent;
+                        card.stack_parent = None;
+                        (parent, card.stack_child)
+                    };
+                    // finish unstack
+                    if let Some(parent) = parent {
+                        let mut card = cards.get_mut(parent).unwrap();
+                        card.stack_child = None;
+                        // queue parent for recomputation
+                        stack_roots.queued_stack_recomputations.insert(parent);
 
-                    // unstacked card is now a stack root, create a new stack root as pending and recompute
-                    if child.is_some() {
-                        stack_roots.roots.insert(entity, StackType::Pending);
-                        stack_roots.queued_stack_recomputations.insert(entity);
+                        // unstacked card is now a stack root, create a new stack root as pending and recompute
+                        if child.is_some() {
+                            stack_roots.roots.insert(entity, StackType::Pending);
+                            stack_roots.queued_stack_recomputations.insert(entity);
+                        }
                     }
                 }
             }
@@ -587,7 +726,7 @@ fn evaluate_stacks(
                         if let Ok(transform) = transforms.get(*root) {
                             commands.spawn_bundle(CardBundle {
                                 card: Card {
-                                    card_type: CardType::Villager,
+                                    info: CardType::Villager.into(),
                                     ..default()
                                 },
                                 transform: Transform::from_xyz(
@@ -618,7 +757,7 @@ fn get_cards_types(root: Entity, cards: &Query<&Card>) -> HashMap<CardType, usiz
     let mut current = root;
     let mut card_types = HashMap::new();
     while let Ok(card) = cards.get(current) {
-        let mut count = card_types.entry(card.card_type).or_insert(0);
+        let mut count = card_types.entry(card.card_type()).or_insert(0);
         *count += 1;
         if let Some(child) = card.stack_child {
             current = child;

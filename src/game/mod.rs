@@ -36,18 +36,18 @@ fn setup(
 
     commands.spawn_bundle(CardBundle {
         transform: Transform::from_xyz(-0.5, 0.0, 0.0),
-        card: Card {
-            card_type: CardType::Villager,
-            ..default()
-        },
+        card: Card::from(CardType::Villager),
         ..default()
     });
     commands.spawn_bundle(CardBundle {
         transform: Transform::from_xyz(0.5, 0.0, 0.0),
-        card: Card {
-            card_type: CardType::Villager,
-            ..default()
-        },
+        card: Card::from(CardType::Villager),
+        ..default()
+    });
+
+    commands.spawn_bundle(CardBundle {
+        transform: Transform::from_xyz(0.0, 3.0, 0.0),
+        card: Card::from(CardType::Goblin),
         ..default()
     });
 
