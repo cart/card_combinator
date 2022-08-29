@@ -82,7 +82,7 @@ pub fn move_camera(
         }
         transform.translation += direction * camera.base_speed * time.delta_seconds();
 
-        let target_z = 8.0 + *view_height as f32 * 2.0;
+        let target_z = 8.0 + *view_height as f32 * 3.0;
         let mut animation = AnimateRange::new(
             Duration::from_secs_f32(0.2),
             Ease::Linear,

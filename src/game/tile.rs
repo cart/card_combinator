@@ -241,11 +241,10 @@ pub fn hover_tile(
     for (tile, tile_slot) in tiles.iter() {
         match tile {
             Tile::Woods {
-                slotted_villager: slotted_card,
-                ..
+                slotted_villager, ..
             } => {
                 let mut visibility = visibilities.get_mut(tile_slot.0).unwrap();
-                visibility.is_visible = slotted_card.is_some();
+                visibility.is_visible = slotted_villager.is_some();
             }
         }
     }

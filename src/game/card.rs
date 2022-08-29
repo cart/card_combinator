@@ -453,7 +453,7 @@ pub fn select_card(
                             } => {
                                 *slotted_villager = None;
                                 if let Some(progress_bar) = *progress_bar {
-                                    commands.entity(progress_bar).despawn();
+                                    commands.entity(progress_bar).despawn_recursive();
                                 }
                             }
                         }
