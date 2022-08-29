@@ -350,25 +350,25 @@ fn on_spawn_card(
                 transform: Transform::from_xyz(0.0, -0.08, 0.001),
                 ..default()
             });
-            parent
-                .spawn_bundle(SpatialBundle::default())
-                .with_children(|parent| {
-                    let max = card.info.stats.max_health;
-                    let offset = HEART_PANEL_WIDTH / max as f32;
-                    let width = (max - 1) as f32 * offset;
-                    for i in 0..max {
-                        parent.spawn_bundle(PbrBundle {
-                            material: card_data.heart_material.clone(),
-                            mesh: card_data.heart_mesh.clone(),
-                            transform: Transform::from_xyz(
-                                i as f32 * offset - width / 2.0,
-                                0.37,
-                                0.01,
-                            ),
-                            ..default()
-                        });
-                    }
-                });
+            // parent
+            //     .spawn_bundle(SpatialBundle::default())
+            //     .with_children(|parent| {
+            //         let max = card.info.stats.max_health;
+            //         let offset = HEART_PANEL_WIDTH / max as f32;
+            //         let width = (max - 1) as f32 * offset;
+            //         for i in 0..max {
+            //             parent.spawn_bundle(PbrBundle {
+            //                 material: card_data.heart_material.clone(),
+            //                 mesh: card_data.heart_mesh.clone(),
+            //                 transform: Transform::from_xyz(
+            //                     i as f32 * offset - width / 2.0,
+            //                     0.37,
+            //                     0.01,
+            //                 ),
+            //                 ..default()
+            //             });
+            //         }
+            //     });
         });
     }
 }
